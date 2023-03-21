@@ -1,0 +1,16 @@
+version: '3.9'
+services:
+  frontend:
+    image: "zenoli/rb-scores-frontend"
+    build: "./frontend"
+    container_name: "frontend"
+    ports:
+      - "8080:80"
+    env_file:
+        - .env
+  backend:
+    image: "zenoli/rb-scores-backend"
+    build: "./backend"
+    container_name: "backend"
+    ports:
+      - "3000:3000"
