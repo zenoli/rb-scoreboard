@@ -3,4 +3,4 @@
 	url = git@github.com:zenoli/rb-scoreboard-backend.git
 [submodule "frontend"]
 	path = frontend
-	url = git@github.com:zenoli/rb-scoreboard-backend.git
+	url = git@github.com:zenoli/rb-scoreboard-frontend.git
