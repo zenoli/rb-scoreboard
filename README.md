@@ -9,28 +9,20 @@ providing the live scores.
 
 ## Run
 
-In order to run the app, make `MONGO_URL`-environment variable has be set with the valid Mongo DB credentials.
-These are stored in the connected railway.app project.
-The `MONGO_URL` variable is set when executing `docker compose` from a railway-subshell provided by `railway-cli`:
+### Backend Setup
+See [here](https://github.com/zenoli/rb-scoreboard-backend)
 
+### Frontend Setup
+Docker compose automatically sets up the proxy url so that backend requests from the frontend
+automatically get forwarded to the locally running backend instance. If you want to use the
+backend service in the cloud, change the `API_PROXY` environment variable in `docker-compose.yml`.
+Keep in mind that this completely bypasses the backend service.
 
-Enter the sub-shell:
-
-```
-> railway shell
-No service linked, skipping service variables
-Entering subshell with Railway variables available. Type 'exit' to exit.
-
-```
+### Starting the services
 
 Execute:
 
 ```
 > docker compose up --build
-```
-
-Alternatively, if you can use:
-```
-MONGO_URL={{my-mongo-url}} docker compose up  --build
 ```
 

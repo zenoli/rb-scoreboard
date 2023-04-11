@@ -6,13 +6,13 @@ services:
     container_name: "frontend"
     ports:
       - "8080:80"
-    env_file:
-        - .env
+    environment:
+      - API_PROXY=http://backend:3000/
   backend:
     image: "zenoli/rb-scores-backend"
     build: "./backend"
     container_name: "backend"
     ports:
       - "3000:3000"
-    environment:
-      - MONGO_URL
+    env_file:
+      - backend/.env
