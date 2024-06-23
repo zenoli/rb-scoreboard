@@ -1,0 +1,8 @@
+[submodule "frontend"]
+	path = frontend
+	url = git@github.com:zenoli/rb-scoreboard-frontend
+	branch = main
+[submodule "backend"]
+	path = backend
+	url = git@github.com:zenoli/rb-scoreboard-backend
+	branch = main
