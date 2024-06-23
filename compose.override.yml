@@ -1,5 +1,8 @@
 services:
   rb-scores-frontend:
+    build: 
+      args:
+        BACKEND_URI: http://rb-scores-backend:3001 # Used during build time
     environment:
-      BACKEND_URI: http://rb-scores-backend:3001
+        BACKEND_URI: http://rb-scores-backend:3001 # Used during runtime
 
