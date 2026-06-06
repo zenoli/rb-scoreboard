@@ -168,6 +168,17 @@ async def sync_fixtures(session: AsyncSession) -> None:
     logger.info("Synced %d fixtures, %d participants", len(fixture_rows), len(participant_rows))
 
 
+async def sync_all_events(session: AsyncSession) -> None:
+    """Sync events for ALL fixtures regardless of state or time window. Used for historical data."""
+    logger.info("Syncing events for all fixtures...")
+    result = await session.execute(select(Fixture.id))
+    all_ids = list(result.scalars().all())
+    if not all_ids:
+        logger.info("No fixtures found")
+        return
+    await _sync_events_for_fixtures(session, all_ids)
+
+
 async def sync_events(session: AsyncSession) -> None:
     """Sync events only for fixtures that are currently LIVE or recently finished."""
     logger.info("Syncing events for active fixtures...")
@@ -176,18 +187,18 @@ async def sync_events(session: AsyncSession) -> None:
         logger.info("No active fixtures, skipping event sync")
         return
 
+    await _sync_events_for_fixtures(session, active_ids)
+
+
+async def _sync_events_for_fixtures(session: AsyncSession, fixture_ids: list[int]) -> None:
     event_rows: list[dict] = []
-    for fixture_id in active_ids:
+    for fixture_id in fixture_ids:
         raw = await client.get(
             "football", "fixtures", fixture_id,
             params={"include": "events"},
         )
         fixture_data = raw.get("data", {})
-        # Also update fixture state
         state = _extract_state(fixture_data)
-        await session.execute(
-            select(Fixture).where(Fixture.id == fixture_id)
-        )
         await session.execute(
             Fixture.__table__.update()
             .where(Fixture.id == fixture_id)
@@ -208,7 +219,7 @@ async def sync_events(session: AsyncSession) -> None:
 
     await _upsert(session, Event, event_rows)
     await session.commit()
-    logger.info("Synced %d events across %d fixtures", len(event_rows), len(active_ids))
+    logger.info("Synced %d events across %d fixtures", len(event_rows), len(fixture_ids))
 
 
 async def sync_lineups(session: AsyncSession) -> None:
@@ -303,6 +314,7 @@ SYNC_TARGETS = {
     "teams": sync_teams,
     "fixtures": sync_fixtures,
     "events": sync_events,
+    "all_events": sync_all_events,
     "lineups": sync_lineups,
 }
 

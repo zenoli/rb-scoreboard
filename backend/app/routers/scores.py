@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.services.scoring import UserScore, compute_scores
+from app.services.scoring import ScoreEvent, UserScore, compute_scores, compute_user_score_events
 
 router = APIRouter()
 
@@ -23,6 +23,26 @@ class UserScoreResponse(BaseModel):
 
 class ScoreboardResponse(BaseModel):
     users: list[UserScoreResponse]
+
+
+class ScoreEventResponse(BaseModel):
+    player_id: int | None
+    player_name: str | None
+    player_image_path: str | None
+    team_name: str | None
+    team_image_path: str | None
+    opponent_name: str | None
+    opponent_image_path: str | None
+    event_type: str
+    minute: int | None
+    points: float
+    fixture_name: str | None
+
+
+@router.get("/scores/{user_id}/events", response_model=list[ScoreEventResponse])
+async def get_user_score_events(user_id: int, session: AsyncSession = Depends(get_db)):
+    events = await compute_user_score_events(session, user_id)
+    return [ScoreEventResponse(**e.__dict__) for e in events]
 
 
 @router.get("/scores", response_model=ScoreboardResponse)

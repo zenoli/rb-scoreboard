@@ -5,8 +5,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.database import get_db
+from app.models.coach import Coach
 from app.models.draft import Draft
+from app.models.player import Player
+from app.models.position import Position
+from app.models.team import Team
 from app.models.user import User
+from app.services.scoring import compute_player_points
 
 router = APIRouter()
 
@@ -38,19 +43,30 @@ class UserDraftResponse(BaseModel):
     coach: CoachBrief | None
 
 
+class PlayerPointsResponse(BaseModel):
+    player_id: int
+    points: float
+
+
+@router.get("/drafts/{user_id}/points", response_model=list[PlayerPointsResponse])
+async def get_draft_points(user_id: int, session: AsyncSession = Depends(get_db)):
+    points = await compute_player_points(session, user_id)
+    return [PlayerPointsResponse(player_id=pid, points=pts) for pid, pts in points.items()]
+
+
 @router.get("/drafts", response_model=list[UserDraftResponse])
 async def get_drafts(session: AsyncSession = Depends(get_db)):
     users_result = await session.execute(
         select(User).options(
             selectinload(User.draft_entries)
             .selectinload(Draft.player)
-            .selectinload("team"),
+            .selectinload(Player.team),
             selectinload(User.draft_entries)
             .selectinload(Draft.player)
-            .selectinload("position"),
+            .selectinload(Player.position),
             selectinload(User.draft_entries)
             .selectinload(Draft.coach)
-            .selectinload("team"),
+            .selectinload(Coach.team),
         )
     )
     users: list[User] = list(users_result.scalars().unique().all())

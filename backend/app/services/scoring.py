@@ -1,16 +1,19 @@
 """Score computation — always recomputed from events, never stored."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.coach import Coach
 from app.models.draft import Draft
 from app.models.event import Event
 from app.models.event_type import EventType
 from app.models.fixture import Fixture, FixtureParticipant
 from app.models.lineup import Lineup
+from app.models.player import Player
+from app.models.position import Position
 from app.models.scoring_rule import ScoringRule
 from app.models.tournament_config import TournamentConfig
 from app.models.user import User
@@ -61,7 +64,7 @@ async def compute_scores(session: AsyncSession) -> list[UserScore]:
         select(User).options(
             selectinload(User.draft_entries)
             .selectinload(Draft.player)
-            .selectinload("position"),
+            .selectinload(Player.position),
             selectinload(User.draft_entries).selectinload(Draft.coach),
         )
     )
@@ -139,19 +142,15 @@ async def _apply_clean_sheets(
     user_draft_player_ids: dict[int, set[int]],
     weights: dict[str, float],
 ) -> None:
-    # Load fixtures with participants and events
     fixtures_result = await session.execute(
         select(Fixture).options(
-            selectinload(Fixture.participants).selectinload(FixtureParticipant.team),
+            selectinload(Fixture.participants),
             selectinload(Fixture.events).selectinload(Event.event_type),
             selectinload(Fixture.lineups),
         )
     )
     fixtures: list[Fixture] = list(fixtures_result.scalars().all())
 
-    # Load GK player ids (position category = GK)
-    from app.models.player import Player
-    from app.models.position import Position
     gk_result = await session.execute(
         select(Player.id).join(Position).where(Position.category == "GK")
     )
@@ -161,57 +160,18 @@ async def _apply_clean_sheets(
         if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
             continue
 
-        # Goals conceded per team (excluding penalty shootout)
-        goals_conceded: dict[int, int] = {}
-        for event in fixture.events:
-            if not event.event_type:
-                continue
-            dev_name = (event.event_type.developer_name or "").upper()
-            if dev_name in _GOAL_TYPES and event.period_id != PENALTY_SHOOTOUT_PERIOD:
-                # A goal event's team_id is the team that SCORED
-                # So the team that conceded is the opponent
-                if event.team_id:
-                    for participant in fixture.participants:
-                        if participant.team_id != event.team_id:
-                            goals_conceded[participant.team_id] = (
-                                goals_conceded.get(participant.team_id, 0) + 1
-                            )
-
-        # Build lineup lookup: player_id → (type_id, minute)
-        starter_ids: dict[int, int] = {}  # player_id → type_id
-        sub_on_events: dict[int, int] = {}  # player_id → minute substituted on
-        sub_off_events: dict[int, int] = {}  # player_id → minute substituted off
-
-        for lu in fixture.lineups:
-            if lu.player_id:
-                starter_ids[lu.player_id] = lu.type_id or 0
-
-        for event in fixture.events:
-            if not event.event_type:
-                continue
-            dev_name = (event.event_type.developer_name or "").upper()
-            if dev_name == "SUBSTITUTION":
-                if event.player_id:  # player coming on
-                    sub_on_events[event.player_id] = event.minute or 0
-                if event.related_player_id:  # player going off
-                    sub_off_events[event.related_player_id] = event.minute or 0
-
+        goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
         fixture_team_ids = {p.team_id for p in fixture.participants}
 
         for uid, player_ids in user_draft_player_ids.items():
             for pid in player_ids:
                 if pid not in gk_ids:
                     continue
-                # Find which team this keeper belongs to in this fixture
-                # We need to check if this player's team participated
-                # We'll match via lineups or sub events
-                keeper_team_id = _find_keeper_team(pid, fixture, starter_ids, sub_on_events)
+                keeper_team_id = _find_keeper_team(pid, fixture, starter_ids, sub_on)
                 if keeper_team_id not in fixture_team_ids:
                     continue
-
-                if not _keeper_played(pid, starter_ids, sub_on_events, sub_off_events):
+                if not _keeper_played(pid, starter_ids, sub_on, sub_off):
                     continue
-
                 if goals_conceded.get(keeper_team_id, 0) == 0:
                     user_scores[uid].clean_sheets += weights["clean_sheet"]
 
@@ -253,3 +213,318 @@ async def _load_weights(session: AsyncSession) -> dict[str, float]:
     result = await session.execute(select(ScoringRule))
     rules = result.scalars().all()
     return {r.event_key: r.weight for r in rules}
+
+
+# ---------------------------------------------------------------------------
+# Per-player points (for draft badges)
+# ---------------------------------------------------------------------------
+
+
+async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int, float]:
+    """Returns player_id → total points for all players in a user's draft."""
+    weights = await _load_weights(session)
+
+    draft_result = await session.execute(
+        select(Draft)
+        .where(Draft.user_id == user_id)
+        .options(selectinload(Draft.player).selectinload(Player.position))
+    )
+    draft_entries = list(draft_result.scalars().all())
+    player_ids = {e.player_id for e in draft_entries if e.player_id}
+    if not player_ids:
+        return {}
+
+    player_points: dict[int, float] = {pid: 0.0 for pid in player_ids}
+
+    events_result = await session.execute(
+        select(Event)
+        .where((Event.player_id.in_(player_ids)) | (Event.related_player_id.in_(player_ids)))
+        .options(selectinload(Event.event_type))
+    )
+    for event in events_result.scalars().all():
+        if not event.event_type:
+            continue
+        dev = (event.event_type.developer_name or "").upper()
+        pid = event.player_id
+        if dev in _GOAL_TYPES and pid in player_ids:
+            player_points[pid] += weights["goal"]
+        elif dev in _ASSIST_TYPES and pid in player_ids:
+            player_points[pid] += weights["assist"]
+        elif dev in _YELLOW_TYPES and pid in player_ids:
+            player_points[pid] += weights["yellow_card"]
+        elif dev in _RED_TYPES and pid in player_ids:
+            player_points[pid] += weights["red_card"]
+        if dev in _GOAL_TYPES and event.related_player_id in player_ids:
+            player_points[event.related_player_id] += weights["assist"]
+
+    # Clean sheets for GK players in this draft
+    gk_ids = {
+        e.player_id
+        for e in draft_entries
+        if e.player_id and e.player and e.player.position and e.player.position.category == "GK"
+    }
+    if gk_ids:
+        cs = await _per_player_clean_sheets(session, gk_ids, weights)
+        for pid, pts in cs.items():
+            player_points[pid] = player_points.get(pid, 0.0) + pts
+
+    return player_points
+
+
+async def _per_player_clean_sheets(
+    session: AsyncSession, gk_ids: set[int], weights: dict[str, float]
+) -> dict[int, float]:
+    fixtures_result = await session.execute(
+        select(Fixture).options(
+            selectinload(Fixture.participants),
+            selectinload(Fixture.events).selectinload(Event.event_type),
+            selectinload(Fixture.lineups),
+        )
+    )
+    cs: dict[int, float] = {}
+    for fixture in fixtures_result.scalars().all():
+        if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
+            continue
+        goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
+        fixture_team_ids = {p.team_id for p in fixture.participants}
+        for pid in gk_ids:
+            keeper_team = _find_keeper_team(pid, fixture, starter_ids, sub_on)
+            if keeper_team not in fixture_team_ids:
+                continue
+            if not _keeper_played(pid, starter_ids, sub_on, sub_off):
+                continue
+            if goals_conceded.get(keeper_team, 0) == 0:
+                cs[pid] = cs.get(pid, 0.0) + weights["clean_sheet"]
+    return cs
+
+
+def _parse_fixture_events(
+    fixture: "Fixture",
+) -> tuple[dict[int, int], dict[int, int], dict[int, int], dict[int, int]]:
+    """Returns (goals_conceded, starter_ids, sub_on, sub_off) for a fixture."""
+    goals_conceded: dict[int, int] = {}
+    starter_ids: dict[int, int] = {}
+    sub_on: dict[int, int] = {}
+    sub_off: dict[int, int] = {}
+
+    for lu in fixture.lineups:
+        if lu.player_id:
+            starter_ids[lu.player_id] = lu.type_id or 0
+
+    for event in fixture.events:
+        if not event.event_type:
+            continue
+        dev = (event.event_type.developer_name or "").upper()
+        if dev in _GOAL_TYPES and event.period_id != PENALTY_SHOOTOUT_PERIOD:
+            if event.team_id:
+                for p in fixture.participants:
+                    if p.team_id != event.team_id:
+                        goals_conceded[p.team_id] = goals_conceded.get(p.team_id, 0) + 1
+        elif dev == "SUBSTITUTION":
+            if event.player_id:
+                sub_on[event.player_id] = event.minute or 0
+            if event.related_player_id:
+                sub_off[event.related_player_id] = event.minute or 0
+
+    return goals_conceded, starter_ids, sub_on, sub_off
+
+
+# ---------------------------------------------------------------------------
+# Per-user score events (for scoreboard detail page)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ScoreEvent:
+    player_id: int | None
+    player_name: str | None
+    player_image_path: str | None
+    team_name: str | None
+    team_image_path: str | None
+    opponent_name: str | None
+    opponent_image_path: str | None
+    event_type: str  # goal | assist | yellow_card | red_card | clean_sheet | coach_winner
+    minute: int | None
+    points: float
+    fixture_name: str | None
+
+
+async def compute_user_score_events(session: AsyncSession, user_id: int) -> list[ScoreEvent]:
+    """Returns all scoring events for a user, including synthetic clean sheet / coach_winner rows."""
+    weights = await _load_weights(session)
+
+    # Load user's draft with player and coach details
+    user_result = await session.execute(
+        select(User)
+        .where(User.id == user_id)
+        .options(
+            selectinload(User.draft_entries).selectinload(Draft.player).selectinload(Player.team),
+            selectinload(User.draft_entries).selectinload(Draft.player).selectinload(Player.position),
+            selectinload(User.draft_entries).selectinload(Draft.coach).selectinload(Coach.team),
+        )
+    )
+    user = user_result.scalar_one_or_none()
+    if not user:
+        return []
+
+    player_map: dict[int, "Player"] = {}
+    gk_ids: set[int] = set()
+    coach = None
+
+    for entry in user.draft_entries:
+        if entry.player:
+            player_map[entry.player.id] = entry.player
+            if entry.player.position and entry.player.position.category == "GK":
+                gk_ids.add(entry.player.id)
+        if entry.coach:
+            coach = entry.coach
+
+    player_ids = set(player_map.keys())
+
+    # Load events for these players
+    events_result = await session.execute(
+        select(Event)
+        .where((Event.player_id.in_(player_ids)) | (Event.related_player_id.in_(player_ids)))
+        .options(selectinload(Event.event_type))
+    )
+    events = list(events_result.scalars().all())
+
+    # Load fixtures involved (with participants + teams)
+    fixture_ids = {e.fixture_id for e in events if e.fixture_id}
+    fixture_map: dict[int, Fixture] = {}
+    if fixture_ids:
+        fx_result = await session.execute(
+            select(Fixture)
+            .where(Fixture.id.in_(fixture_ids))
+            .options(selectinload(Fixture.participants).selectinload(FixtureParticipant.team))
+        )
+        fixture_map = {f.id: f for f in fx_result.scalars().all()}
+
+    score_events: list[ScoreEvent] = []
+
+    for event in events:
+        if not event.event_type:
+            continue
+        dev = (event.event_type.developer_name or "").upper()
+
+        # Determine player and event type
+        pid: int | None = None
+        event_type: str | None = None
+        pts: float = 0.0
+
+        if dev in _GOAL_TYPES and event.player_id in player_ids:
+            pid, event_type, pts = event.player_id, "goal", weights["goal"]
+        elif dev in _ASSIST_TYPES and event.player_id in player_ids:
+            pid, event_type, pts = event.player_id, "assist", weights["assist"]
+        elif dev in _YELLOW_TYPES and event.player_id in player_ids:
+            pid, event_type, pts = event.player_id, "yellow_card", weights["yellow_card"]
+        elif dev in _RED_TYPES and event.player_id in player_ids:
+            pid, event_type, pts = event.player_id, "red_card", weights["red_card"]
+        elif dev in _GOAL_TYPES and event.related_player_id in player_ids:
+            pid, event_type, pts = event.related_player_id, "assist", weights["assist"]
+
+        if pid is None or event_type is None:
+            continue
+
+        player = player_map[pid]
+        fixture = fixture_map.get(event.fixture_id) if event.fixture_id else None
+        player_team_id = player.team_id
+        opponent = _get_opponent_team(fixture, player_team_id)
+
+        score_events.append(
+            ScoreEvent(
+                player_id=pid,
+                player_name=player.display_name,
+                player_image_path=player.image_path,
+                team_name=player.team.name if player.team else None,
+                team_image_path=player.team.image_path if player.team else None,
+                opponent_name=opponent.name if opponent else None,
+                opponent_image_path=opponent.image_path if opponent else None,
+                event_type=event_type,
+                minute=event.minute,
+                points=pts,
+                fixture_name=fixture.name if fixture else None,
+            )
+        )
+
+    # Clean sheet events
+    if gk_ids:
+        cs_events = await _clean_sheet_events(session, gk_ids, player_map, weights)
+        score_events.extend(cs_events)
+
+    # Coach winner
+    tc_result = await session.execute(select(TournamentConfig))
+    tc = tc_result.scalar_one_or_none()
+    if tc and tc.winner_team_id and coach and coach.team_id == tc.winner_team_id:
+        score_events.append(
+            ScoreEvent(
+                player_id=None,
+                player_name=coach.display_name,
+                player_image_path=coach.image_path,
+                team_name=coach.team.name if coach.team else None,
+                team_image_path=coach.team.image_path if coach.team else None,
+                opponent_name=None,
+                opponent_image_path=None,
+                event_type="coach_winner",
+                minute=None,
+                points=weights["coach_winner"],
+                fixture_name=None,
+            )
+        )
+
+    return sorted(score_events, key=lambda e: (e.minute is None, e.minute or 0))
+
+
+def _get_opponent_team(fixture: "Fixture | None", team_id: int | None):
+    if not fixture or not team_id:
+        return None
+    for p in fixture.participants:
+        if p.team_id != team_id and p.team:
+            return p.team
+    return None
+
+
+async def _clean_sheet_events(
+    session: AsyncSession,
+    gk_ids: set[int],
+    player_map: dict[int, "Player"],
+    weights: dict[str, float],
+) -> list[ScoreEvent]:
+    fixtures_result = await session.execute(
+        select(Fixture).options(
+            selectinload(Fixture.participants).selectinload(FixtureParticipant.team),
+            selectinload(Fixture.events).selectinload(Event.event_type),
+            selectinload(Fixture.lineups),
+        )
+    )
+    cs_events: list[ScoreEvent] = []
+    for fixture in fixtures_result.scalars().all():
+        if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
+            continue
+        goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
+        fixture_team_ids = {p.team_id for p in fixture.participants}
+        for pid in gk_ids:
+            keeper_team = _find_keeper_team(pid, fixture, starter_ids, sub_on)
+            if keeper_team not in fixture_team_ids:
+                continue
+            if not _keeper_played(pid, starter_ids, sub_on, sub_off):
+                continue
+            if goals_conceded.get(keeper_team, 0) == 0:
+                player = player_map.get(pid)
+                opponent = _get_opponent_team(fixture, keeper_team)
+                cs_events.append(
+                    ScoreEvent(
+                        player_id=pid,
+                        player_name=player.display_name if player else None,
+                        player_image_path=player.image_path if player else None,
+                        team_name=player.team.name if player and player.team else None,
+                        team_image_path=player.team.image_path if player and player.team else None,
+                        opponent_name=opponent.name if opponent else None,
+                        opponent_image_path=opponent.image_path if opponent else None,
+                        event_type="clean_sheet",
+                        minute=None,
+                        points=weights["clean_sheet"],
+                        fixture_name=fixture.name,
+                    )
+                )
+    return cs_events
