@@ -1,2 +1,4 @@
 .env
 .direnv/
+.claude/
+skills-lock.json
