@@ -2,3 +2,12 @@
 .direnv/
 .claude/
 skills-lock.json
+
+# Python
+backend/.venv/
+backend/__pycache__/
+backend/**/__pycache__/
+backend/*.db
+backend/*.db-shm
+backend/*.db-wal
+
