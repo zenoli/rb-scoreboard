@@ -136,6 +136,13 @@ async def set_user_active(
     return user
 
 
+@router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_user(user_id: int, session: AsyncSession = Depends(get_db)):
+    user = await _get_user_or_404(session, user_id)
+    await session.delete(user)
+    await session.commit()
+
+
 # ---------------------------------------------------------------------------
 # Drafts
 # ---------------------------------------------------------------------------

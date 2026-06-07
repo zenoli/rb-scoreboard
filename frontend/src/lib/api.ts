@@ -57,6 +57,13 @@ export const api = {
     postJson('/admin/users', body, key),
   setUserActive: (userId: number, is_active: boolean, key: string) =>
     put(`/admin/users/${userId}/active`, { is_active }, key),
+  deleteUser: async (userId: number, key: string) => {
+    const res = await fetch(`${API_BASE}/admin/users/${userId}`, {
+      method: 'DELETE',
+      headers: { 'X-Admin-Key': key },
+    })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  },
   adminDraft: (userId: number, key: string) => get(`/admin/drafts/${userId}`, key),
   assignDraft: (userId: number, body: { player_ids: number[]; coach_id: number }, key: string) =>
     put(`/admin/drafts/${userId}`, body, key),

@@ -20,6 +20,9 @@ export default function AdminPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [formLoading, setFormLoading] = useState(false)
 
+  const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
   useEffect(() => {
     const stored = localStorage.getItem('admin_api_key') ?? ''
     setSavedKey(stored)
@@ -62,6 +65,21 @@ export default function AdminPage() {
       setFormError(e instanceof Error ? e.message : 'Failed to create user')
     } finally {
       setFormLoading(false)
+    }
+  }
+
+  async function handleDeleteUser() {
+    if (!deleteTarget) return
+    setDeleteLoading(true)
+    try {
+      await api.deleteUser(deleteTarget.id, savedKey)
+      setUsers((prev) => prev ? prev.filter((u) => u.id !== deleteTarget.id) : prev)
+      setDeleteTarget(null)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to delete user')
+      setDeleteTarget(null)
+    } finally {
+      setDeleteLoading(false)
     }
   }
 
@@ -159,6 +177,12 @@ export default function AdminPage() {
                       >
                         Draft
                       </Link>
+                      <button
+                        onClick={() => setDeleteTarget(u)}
+                        className="text-xs text-destructive hover:underline transition-colors"
+                      >
+                        Delete
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -166,6 +190,34 @@ export default function AdminPage() {
             )}
           </section>
         </>
+      )}
+
+      {/* Delete confirmation */}
+      {deleteTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg border p-6 w-full max-w-sm flex flex-col gap-4 mx-4">
+            <h2 className="font-semibold text-base">Delete user?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete <span className="font-medium text-foreground">{deleteTarget.username}</span> and all their data. This cannot be undone.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setDeleteTarget(null)}
+                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                disabled={deleteLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteUser}
+                disabled={deleteLoading}
+                className="rounded-md bg-destructive text-destructive-foreground px-4 py-2 text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* Create user modal */}
