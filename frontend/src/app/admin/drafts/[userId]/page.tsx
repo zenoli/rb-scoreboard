@@ -22,6 +22,7 @@ export default function AdminDraftPage() {
   const [selectedCoach, setSelectedCoach] = useState<number | null>(null)
   const [posFilter, setPosFilter] = useState<string>('GK')
   const [search, setSearch] = useState('')
+  const [hasDraft, setHasDraft] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -35,9 +36,14 @@ export default function AdminDraftPage() {
       .then(([ps, cs, existing]) => {
         setPlayers(ps)
         setCoaches(cs)
-        if (existing) {
-          setSelectedPlayers(new Set(existing.players?.map((p: { id: number }) => p.id) ?? []))
-          if (existing.coach) setSelectedCoach(existing.coach.id)
+        if (existing?.entries?.length) {
+          const playerIds = existing.entries
+            .filter((e: { player_id: number | null }) => e.player_id !== null)
+            .map((e: { player_id: number }) => e.player_id)
+          const coachEntry = existing.entries.find((e: { coach_id: number | null }) => e.coach_id !== null)
+          setSelectedPlayers(new Set(playerIds))
+          if (coachEntry) setSelectedCoach(coachEntry.coach_id)
+          setHasDraft(true)
         }
       })
       .finally(() => setLoading(false))
@@ -108,7 +114,7 @@ export default function AdminDraftPage() {
         <button onClick={() => router.back()} className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </button>
-        <h1 className="text-xl font-semibold">Assign Draft</h1>
+        <h1 className="text-xl font-semibold">{hasDraft ? 'Edit Draft' : 'Assign Draft'}</h1>
       </div>
 
       {/* Slot summary */}
@@ -246,13 +252,22 @@ export default function AdminDraftPage() {
       <div className="flex flex-col gap-2 pt-2">
         {saveError && <p className="text-xs text-destructive">{saveError}</p>}
         {saveOk && <p className="text-xs text-green-600">Saved! Redirecting…</p>}
-        <button
-          onClick={save}
-          disabled={!isComplete || saving}
-          className="w-full rounded-md bg-primary text-primary-foreground py-3 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {saving ? 'Saving…' : `Save Draft (${selectedPlayers.size}/16 players${selectedCoach ? ' + coach' : ''})`}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => { setSelectedPlayers(new Set()); setSelectedCoach(null); setHasDraft(false) }}
+            disabled={saving}
+            className="rounded-md border px-4 py-3 text-sm font-medium hover:bg-accent transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Clear
+          </button>
+          <button
+            onClick={save}
+            disabled={!isComplete || saving}
+            className="flex-1 rounded-md bg-primary text-primary-foreground py-3 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {saving ? 'Saving…' : `${hasDraft ? 'Update' : 'Save'} Draft (${selectedPlayers.size}/16 players${selectedCoach ? ' + coach' : ''})`}
+          </button>
+        </div>
       </div>
     </div>
   )
