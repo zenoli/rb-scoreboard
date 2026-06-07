@@ -21,35 +21,35 @@ type CategoryMeta = {
   label: string
   icon: (props: LucideProps) => React.ReactNode
   eventTypes: ScoreEvent['event_type'][]
-  badgeVariant: 'default' | 'secondary' | 'destructive' | 'outline'
+  badgeVariant: 'secondary'
 }
 
 const CATEGORIES: { key: CategoryKey; meta: CategoryMeta }[] = [
   {
     key: 'goal',
-    meta: { label: 'Goals', icon: Target, eventTypes: ['goal'], badgeVariant: 'default' },
+    meta: { label: 'Goal', icon: Target, eventTypes: ['goal'], badgeVariant: 'secondary' },
   },
   {
     key: 'assist',
-    meta: { label: 'Assists', icon: Handshake, eventTypes: ['assist'], badgeVariant: 'secondary' },
+    meta: { label: 'Assist', icon: Handshake, eventTypes: ['assist'], badgeVariant: 'secondary' },
   },
   {
     key: 'booking',
-    meta: { label: 'Booking', icon: Layers2, eventTypes: ['yellow_card', 'red_card'], badgeVariant: 'outline' },
+    meta: { label: 'Booking', icon: Layers2, eventTypes: ['yellow_card', 'red_card'], badgeVariant: 'secondary' },
   },
   {
     key: 'clean_sheet',
-    meta: { label: 'Clean Sheets', icon: Shield, eventTypes: ['clean_sheet'], badgeVariant: 'secondary' },
+    meta: { label: 'Clean Sheet', icon: Shield, eventTypes: ['clean_sheet'], badgeVariant: 'secondary' },
   },
   {
     key: 'coach_winner',
-    meta: { label: 'Coach Winner', icon: Trophy, eventTypes: ['coach_winner'], badgeVariant: 'default' },
+    meta: { label: 'Coach Winner', icon: Trophy, eventTypes: ['coach_winner'], badgeVariant: 'secondary' },
   },
 ]
 
-const BOOKING_BADGE: Partial<Record<ScoreEvent['event_type'], { label: string; variant: 'outline' | 'destructive' }>> = {
-  yellow_card: { label: 'Yellow', variant: 'outline' },
-  red_card: { label: 'Red', variant: 'destructive' },
+const BOOKING_BADGE: Partial<Record<ScoreEvent['event_type'], { label: string; variant: 'secondary' }>> = {
+  yellow_card: { label: 'Yellow', variant: 'secondary' },
+  red_card: { label: 'Red', variant: 'secondary' },
 }
 
 function TeamFlag({ src, name }: { src: string | null; name: string | null }) {
