@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -13,7 +13,6 @@ router = APIRouter()
 
 class RegisterRequest(BaseModel):
     username: str
-    email: EmailStr
     password: str
 
 
@@ -30,7 +29,6 @@ class TokenResponse(BaseModel):
 class UserResponse(BaseModel):
     id: int
     username: str
-    email: str
     is_admin: bool
     is_active: bool
 
@@ -40,16 +38,13 @@ class UserResponse(BaseModel):
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(body: RegisterRequest, session: AsyncSession = Depends(get_db)):
     existing = await session.execute(
-        select(User).where(
-            (User.username == body.username) | (User.email == body.email)
-        )
+        select(User).where(User.username == body.username)
     )
     if existing.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Username or email already taken")
+        raise HTTPException(status_code=400, detail="Username already taken")
 
     user = User(
         username=body.username,
-        email=body.email,
         password_hash=hash_password(body.password),
     )
     session.add(user)

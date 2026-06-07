@@ -89,7 +89,6 @@ export interface ScoringRule {
 export interface AdminUser {
   id: number
   username: string
-  email: string
   is_admin: boolean
   is_active: boolean
 }

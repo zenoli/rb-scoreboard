@@ -16,7 +16,7 @@ export default function AdminPage() {
   const [syncStatus, setSyncStatus] = useState<Record<string, string>>({})
 
   const [modalOpen, setModalOpen] = useState(false)
-  const [form, setForm] = useState({ username: '', email: '', password: '' })
+  const [form, setForm] = useState({ username: '', password: '' })
   const [formError, setFormError] = useState<string | null>(null)
   const [formLoading, setFormLoading] = useState(false)
 
@@ -60,7 +60,7 @@ export default function AdminPage() {
       const user = await api.createUser(form, savedKey)
       setUsers((prev) => prev ? [...prev, user] : [user])
       setModalOpen(false)
-      setForm({ username: '', email: '', password: '' })
+      setForm({ username: '', password: '' })
     } catch (e) {
       setFormError(e instanceof Error ? e.message : 'Failed to create user')
     } finally {
@@ -159,7 +159,6 @@ export default function AdminPage() {
                   <div key={u.id} className="flex items-center justify-between py-2 border-b last:border-0">
                     <div>
                       <div className="font-medium text-sm">{u.username}</div>
-                      <div className="text-xs text-muted-foreground">{u.email}</div>
                     </div>
                     <div className="flex items-center gap-2">
                       <Badge variant={u.is_active ? 'default' : 'outline'} className="text-xs">
@@ -234,13 +233,6 @@ export default function AdminPage() {
                 className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
               />
               <input
-                type="email"
-                placeholder="Email"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
                 type="password"
                 placeholder="Password"
                 value={form.password}
@@ -251,7 +243,7 @@ export default function AdminPage() {
             {formError && <p className="text-xs text-destructive">{formError}</p>}
             <div className="flex gap-2 justify-end">
               <button
-                onClick={() => { setModalOpen(false); setForm({ username: '', email: '', password: '' }) }}
+                onClick={() => { setModalOpen(false); setForm({ username: '', password: '' }) }}
                 className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
                 disabled={formLoading}
               >
@@ -259,7 +251,7 @@ export default function AdminPage() {
               </button>
               <button
                 onClick={handleCreateUser}
-                disabled={formLoading || !form.username || !form.email || !form.password}
+                disabled={formLoading || !form.username || !form.password}
                 className="rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
               >
                 {formLoading ? 'Creating…' : 'Create'}

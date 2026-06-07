@@ -53,7 +53,7 @@ export const api = {
   },
   coaches: () => get('/api/coaches'),
   adminUsers: (key: string) => get('/admin/users', key),
-  createUser: (body: { username: string; email: string; password: string }, key: string) =>
+  createUser: (body: { username: string; password: string }, key: string) =>
     postJson('/admin/users', body, key),
   setUserActive: (userId: number, is_active: boolean, key: string) =>
     put(`/admin/users/${userId}/active`, { is_active }, key),
