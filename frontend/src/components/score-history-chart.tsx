@@ -64,13 +64,7 @@ export function ScoreHistoryChart({ data }: { data: ScoreHistoryResponse }) {
           tickFormatter={formatDate}
           tick={{ fontSize: 11 }}
         />
-        <YAxis
-          tickLine={false}
-          axisLine={false}
-          tickMargin={4}
-          tick={{ fontSize: 11 }}
-          width={28}
-        />
+        <YAxis hide />
         <ChartTooltip
           content={
             <ChartTooltipContent
@@ -84,7 +78,7 @@ export function ScoreHistoryChart({ data }: { data: ScoreHistoryResponse }) {
           <Line
             key={s.username}
             dataKey={s.username}
-            type="monotone"
+            type="monotoneX"
             stroke={CHART_COLORS[i % CHART_COLORS.length]}
             strokeWidth={2}
             dot={false}
