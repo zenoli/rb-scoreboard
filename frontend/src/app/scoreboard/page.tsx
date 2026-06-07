@@ -241,10 +241,12 @@ export default function ScoreboardPage() {
       </div>
 
       {history && history.dates.length > 0 && (
-        <div className="mt-6 rounded-md border p-4">
-          <h2 className="text-sm font-semibold mb-4">Points over time</h2>
-          <ScoreHistoryChart data={history} />
-        </div>
+        <>
+          <h2 className="text-xl font-semibold mt-8 mb-4">Points over time</h2>
+          <div className="rounded-md border p-4">
+            <ScoreHistoryChart data={history} />
+          </div>
+        </>
       )}
     </div>
   )
