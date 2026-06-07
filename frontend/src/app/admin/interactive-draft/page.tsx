@@ -294,10 +294,10 @@ function PickModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 pt-[10vh] pb-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
     >
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
+      <div className="bg-background rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]">
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <div>
@@ -327,7 +327,7 @@ function PickModal({
         {/* Country filter (players only) */}
         {!isCoach && (
           <div className="px-4 pb-2 flex-shrink-0">
-            <div className="grid grid-cols-8 gap-x-2 gap-y-2">
+            <div className="grid grid-cols-8 gap-x-3 gap-y-2.5">
               {countries.map((country) => {
                 const isSelected = countryFilter === country.id
                 const isDrafted = userTeamIds.has(country.id)
@@ -338,17 +338,17 @@ function PickModal({
                     title={country.name}
                     className="flex flex-col items-center gap-0.5"
                   >
-                    <div className={`w-8 h-8 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-1' : ''} ${isDrafted ? 'grayscale' : ''}`}>
+                    <div className={`w-10 h-10 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''} ${isDrafted ? 'grayscale' : ''}`}>
                       {country.image_path ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={country.image_path} alt={country.name} className="w-full h-full object-cover scale-150" />
                       ) : (
-                        <div className="w-full h-full bg-muted flex items-center justify-center text-[9px] font-medium">
+                        <div className="w-full h-full bg-muted flex items-center justify-center text-[11px] font-medium">
                           {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
                         </div>
                       )}
                     </div>
-                    <span className={`text-[9px] leading-none ${isDrafted ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
+                    <span className={`text-[11px] leading-none ${isDrafted ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
                       {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
                     </span>
                   </button>
@@ -378,7 +378,7 @@ function PickModal({
                         imagePath={c.image_path}
                         name={c.display_name}
                         teamImagePath={c.team_image_path}
-                        size={32}
+                        size={40}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{c.display_name}</div>
@@ -411,7 +411,7 @@ function PickModal({
                         imagePath={p.image_path}
                         name={p.display_name}
                         teamImagePath={p.team_image_path}
-                        size={32}
+                        size={40}
                       />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{p.display_name}</div>
