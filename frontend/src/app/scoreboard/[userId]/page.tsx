@@ -6,16 +6,30 @@ import { Badge } from '@/components/ui/badge'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { ScoreEvent } from '@/lib/types'
+import {
+  Target,
+  Handshake,
+  SquareMinus,
+  SquareX,
+  Shield,
+  Trophy,
+  type LucideProps,
+} from 'lucide-react'
 
-const EVENT_LABELS: Record<string, { label: string; emoji: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
-  goal: { label: 'Goal', emoji: '⚽', variant: 'default' },
-  assist: { label: 'Assist', emoji: '🅰️', variant: 'secondary' },
-  yellow_card: { label: 'Yellow', emoji: '🟨', variant: 'outline' },
-  red_card: { label: 'Red', emoji: '🟥', variant: 'destructive' },
-  clean_sheet: { label: 'Clean Sheet', emoji: '🧤', variant: 'secondary' },
-  coach_winner: { label: 'Winner', emoji: '🏆', variant: 'default' },
+type EventMeta = {
+  label: string
+  icon: (props: LucideProps) => React.ReactNode
+  variant: 'default' | 'secondary' | 'destructive' | 'outline'
 }
 
+const EVENT_META: Record<string, EventMeta> = {
+  goal: { label: 'Goal', icon: Target, variant: 'default' },
+  assist: { label: 'Assist', icon: Handshake, variant: 'secondary' },
+  yellow_card: { label: 'Yellow', icon: SquareMinus, variant: 'outline' },
+  red_card: { label: 'Red', icon: SquareX, variant: 'destructive' },
+  clean_sheet: { label: 'Clean Sheet', icon: Shield, variant: 'secondary' },
+  coach_winner: { label: 'Winner', icon: Trophy, variant: 'default' },
+}
 
 function TeamFlag({ src, name }: { src: string | null; name: string | null }) {
   if (!src) return <span className="text-xs text-muted-foreground">{name ?? '—'}</span>
@@ -64,7 +78,12 @@ export default function ScoreDetailPage() {
       {events && events.length > 0 && (
         <div className="flex flex-col gap-2">
           {events.map((ev, i) => {
-            const meta = EVENT_LABELS[ev.event_type] ?? { label: ev.event_type, emoji: '•', variant: 'outline' as const }
+            const meta: EventMeta = EVENT_META[ev.event_type] ?? {
+              label: ev.event_type,
+              icon: Target,
+              variant: 'outline' as const,
+            }
+            const Icon = meta.icon
             return (
               <div
                 key={i}
@@ -91,8 +110,9 @@ export default function ScoreDetailPage() {
                 </div>
 
                 <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                  <Badge variant={meta.variant} className="text-xs">
-                    {meta.emoji} {meta.label}
+                  <Badge variant={meta.variant} className="text-xs flex items-center gap-1">
+                    <Icon size={12} />
+                    {meta.label}
                   </Badge>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     {ev.minute != null && <span>{ev.minute}&apos;</span>}
