@@ -195,7 +195,7 @@ async def _sync_events_for_fixtures(session: AsyncSession, fixture_ids: list[int
     for fixture_id in fixture_ids:
         raw = await client.get(
             "football", "fixtures", fixture_id,
-            params={"include": "events"},
+            params={"include": "events;state"},
         )
         fixture_data = raw.get("data", {})
         state = _extract_state(fixture_data)
@@ -283,7 +283,7 @@ def _parse_dt(value: str | None) -> datetime | None:
 def _extract_state(fixture_data: dict) -> str | None:
     state = fixture_data.get("state")
     if isinstance(state, dict):
-        return state.get("short_name") or state.get("name")
+        return state.get("developer_name") or state.get("short_name") or state.get("name")
     return state
 
 

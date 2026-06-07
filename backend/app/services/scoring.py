@@ -1,6 +1,8 @@
 """Score computation — always recomputed from events, never stored."""
 
+from collections import defaultdict
 from dataclasses import dataclass
+from datetime import date
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -213,6 +215,166 @@ async def _load_weights(session: AsyncSession) -> dict[str, float]:
     result = await session.execute(select(ScoringRule))
     rules = result.scalars().all()
     return {r.event_key: r.weight for r in rules}
+
+
+# ---------------------------------------------------------------------------
+# Score history (for line chart)
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class ScoreHistorySeries:
+    user_id: int
+    username: str
+    points: list[float]
+
+
+@dataclass
+class ScoreHistory:
+    dates: list[str]
+    series: list[ScoreHistorySeries]
+
+
+async def compute_score_history(session: AsyncSession) -> ScoreHistory:
+    """Returns cumulative score totals per user grouped by UTC match day.
+
+    Only completed fixtures (FT, AET, FT_PEN) are included. Scores are
+    accumulated incrementally across match days so the last point matches
+    the live scoreboard total.
+    """
+    weights = await _load_weights(session)
+
+    users_result = await session.execute(
+        select(User).options(
+            selectinload(User.draft_entries)
+            .selectinload(Draft.player)
+            .selectinload(Player.position),
+            selectinload(User.draft_entries).selectinload(Draft.coach),
+        )
+    )
+    users: list[User] = list(users_result.scalars().all())
+
+    tc_result = await session.execute(select(TournamentConfig))
+    tc = tc_result.scalar_one_or_none()
+    winner_team_id = tc.winner_team_id if tc else None
+
+    player_to_users: dict[int, list[int]] = {}
+    user_scores: dict[int, UserScore] = {}
+    user_draft_player_ids: dict[int, set[int]] = {}
+    user_coach_team_id: dict[int, int | None] = {}
+    gk_ids: set[int] = set()
+
+    for user in users:
+        us = UserScore(user_id=user.id, username=user.username, is_active=user.is_active)
+        user_scores[user.id] = us
+        player_ids: set[int] = set()
+        coach_team = None
+        for entry in user.draft_entries:
+            if entry.player_id:
+                player_to_users.setdefault(entry.player_id, []).append(user.id)
+                player_ids.add(entry.player_id)
+                if (
+                    entry.player
+                    and entry.player.position
+                    and entry.player.position.category == "GK"
+                ):
+                    gk_ids.add(entry.player_id)
+            if entry.coach_id and entry.coach and entry.coach.team_id:
+                coach_team = entry.coach.team_id
+        user_draft_player_ids[user.id] = player_ids
+        user_coach_team_id[user.id] = coach_team
+
+    fixtures_result = await session.execute(
+        select(Fixture)
+        .where(Fixture.state.in_(["FT", "AET", "FT_PEN"]))
+        .where(Fixture.starting_at.isnot(None))
+        .options(
+            selectinload(Fixture.participants),
+            selectinload(Fixture.events).selectinload(Event.event_type),
+            selectinload(Fixture.lineups),
+        )
+    )
+    completed_fixtures: list[Fixture] = list(fixtures_result.scalars().all())
+
+    fixtures_by_date: dict[date, list[Fixture]] = defaultdict(list)
+    for fixture in completed_fixtures:
+        fixtures_by_date[fixture.starting_at.date()].append(fixture)  # type: ignore[union-attr]
+
+    sorted_dates = sorted(fixtures_by_date.keys())
+
+    active_user_ids = [uid for uid, us in user_scores.items() if us.is_active]
+
+    if not sorted_dates:
+        return ScoreHistory(
+            dates=[],
+            series=[
+                ScoreHistorySeries(
+                    user_id=user_scores[uid].user_id,
+                    username=user_scores[uid].username,
+                    points=[],
+                )
+                for uid in active_user_ids
+            ],
+        )
+
+    # snapshots[i] = {user_id: cumulative_total} for sorted_dates[i]
+    snapshots: list[dict[int, float]] = []
+
+    for d in sorted_dates:
+        for fixture in fixtures_by_date[d]:
+            # Regular events
+            for event in fixture.events:
+                if not event.player_id or not event.event_type:
+                    continue
+                dev = (event.event_type.developer_name or "").upper()
+                for uid in player_to_users.get(event.player_id, []):
+                    us = user_scores[uid]
+                    if dev in _GOAL_TYPES:
+                        us.goals += weights["goal"]
+                    elif dev in _ASSIST_TYPES:
+                        us.assists += weights["assist"]
+                    elif dev in _YELLOW_TYPES:
+                        us.yellow_cards += weights["yellow_card"]
+                    elif dev in _RED_TYPES:
+                        us.red_cards += weights["red_card"]
+                if dev in _GOAL_TYPES and event.related_player_id:
+                    for uid in player_to_users.get(event.related_player_id, []):
+                        user_scores[uid].assists += weights["assist"]
+
+            # Clean sheets for this fixture
+            goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
+            fixture_team_ids = {p.team_id for p in fixture.participants}
+            for uid, player_ids in user_draft_player_ids.items():
+                for pid in player_ids:
+                    if pid not in gk_ids:
+                        continue
+                    keeper_team_id = _find_keeper_team(pid, fixture, starter_ids, sub_on)
+                    if keeper_team_id not in fixture_team_ids:
+                        continue
+                    if not _keeper_played(pid, starter_ids, sub_on, sub_off):
+                        continue
+                    if goals_conceded.get(keeper_team_id, 0) == 0:
+                        user_scores[uid].clean_sheets += weights["clean_sheet"]
+
+        snapshots.append({uid: user_scores[uid].total for uid in active_user_ids})
+
+    # Apply coach_winner bonus to the last snapshot
+    if winner_team_id is not None and snapshots:
+        for uid, team_id in user_coach_team_id.items():
+            if uid in snapshots[-1] and team_id == winner_team_id:
+                snapshots[-1][uid] += weights.get("coach_winner", 0.0)
+
+    return ScoreHistory(
+        dates=[d.isoformat() for d in sorted_dates],
+        series=[
+            ScoreHistorySeries(
+                user_id=user_scores[uid].user_id,
+                username=user_scores[uid].username,
+                points=[snap[uid] for snap in snapshots],
+            )
+            for uid in active_user_ids
+        ],
+    )
 
 
 # ---------------------------------------------------------------------------

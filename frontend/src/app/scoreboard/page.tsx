@@ -21,7 +21,8 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
-import type { ScoreboardResponse, UserScore } from '@/lib/types'
+import type { ScoreboardResponse, ScoreHistoryResponse, UserScore } from '@/lib/types'
+import { ScoreHistoryChart } from '@/components/score-history-chart'
 import {
   Target,
   Handshake,
@@ -114,14 +115,16 @@ const columnDefs: ColumnDef<Row>[] = [
 export default function ScoreboardPage() {
   const router = useRouter()
   const [data, setData] = useState<ScoreboardResponse | null>(null)
+  const [history, setHistory] = useState<ScoreHistoryResponse | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'total', desc: true }])
 
   async function load() {
     try {
-      const res = await api.scores()
-      setData(res)
+      const [scores, hist] = await Promise.all([api.scores(), api.scoreHistory()])
+      setData(scores)
+      setHistory(hist)
       setLastUpdated(new Date())
       setError(null)
     } catch (e) {
@@ -217,6 +220,13 @@ export default function ScoreboardPage() {
           </TableBody>
         </Table>
       </div>
+
+      {history && history.dates.length > 0 && (
+        <div className="mt-6 rounded-md border p-4">
+          <h2 className="text-sm font-semibold mb-4">Points over time</h2>
+          <ScoreHistoryChart data={history} />
+        </div>
+      )}
     </div>
   )
 }

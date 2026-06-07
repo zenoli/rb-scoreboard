@@ -84,6 +84,17 @@ export interface CoachResponse {
   team_image_path: string | null
 }
 
+export interface ScoreHistorySeries {
+  user_id: number
+  username: string
+  points: number[]
+}
+
+export interface ScoreHistoryResponse {
+  dates: string[]
+  series: ScoreHistorySeries[]
+}
+
 export interface ScoringRule {
   event_key: string
   weight: number
