@@ -8,6 +8,7 @@ class Player(Base):
     __tablename__ = "players"
 
     id: Mapped[int] = mapped_column(primary_key=True)  # Sportmonks ID
+    season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"))
     common_name: Mapped[str | None] = mapped_column(String)
     display_name: Mapped[str | None] = mapped_column(String)
     image_path: Mapped[str | None] = mapped_column(String)

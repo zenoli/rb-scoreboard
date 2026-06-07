@@ -12,7 +12,15 @@ export interface UserScore {
 }
 
 export interface ScoreboardResponse {
+  season_name: string | null
   users: UserScore[]
+}
+
+export interface Season {
+  id: number
+  name: string
+  sm_season_id: number
+  is_active: boolean
 }
 
 export interface ScoreEvent {

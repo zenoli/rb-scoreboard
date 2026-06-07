@@ -8,8 +8,7 @@ from app.database import get_db
 from app.models.coach import Coach
 from app.models.draft import Draft
 from app.models.player import Player
-from app.models.position import Position
-from app.models.team import Team
+from app.models.season import Season, SeasonParticipant
 from app.models.user import User
 from app.services.scoring import compute_player_points
 
@@ -58,26 +57,46 @@ async def get_draft_points(user_id: int, session: AsyncSession = Depends(get_db)
 
 @router.get("/drafts", response_model=list[UserDraftResponse])
 async def get_drafts(session: AsyncSession = Depends(get_db)):
-    users_result = await session.execute(
-        select(User).options(
-            selectinload(User.draft_entries)
-            .selectinload(Draft.player)
-            .selectinload(Player.team),
-            selectinload(User.draft_entries)
-            .selectinload(Draft.player)
-            .selectinload(Player.position),
-            selectinload(User.draft_entries)
-            .selectinload(Draft.coach)
-            .selectinload(Coach.team),
+    # Get active season
+    season_result = await session.execute(select(Season).where(Season.is_active == True))  # noqa: E712
+    season = season_result.scalar_one_or_none()
+    if season is None:
+        return []
+
+    # Load all users
+    users_result = await session.execute(select(User))
+    users: list[User] = list(users_result.scalars().unique().all())
+
+    # Load season participants for active season
+    sp_result = await session.execute(
+        select(SeasonParticipant).where(SeasonParticipant.season_id == season.id)
+    )
+    sp_map = {sp.user_id: sp.is_active for sp in sp_result.scalars().all()}
+
+    # Load draft entries for active season
+    drafts_result = await session.execute(
+        select(Draft)
+        .where(Draft.season_id == season.id)
+        .options(
+            selectinload(Draft.player).selectinload(Player.team),
+            selectinload(Draft.player).selectinload(Player.position),
+            selectinload(Draft.coach).selectinload(Coach.team),
         )
     )
-    users: list[User] = list(users_result.scalars().unique().all())
+    draft_entries = list(drafts_result.scalars().all())
+
+    # Group entries by user
+    from collections import defaultdict
+    entries_by_user: dict[int, list[Draft]] = defaultdict(list)
+    for entry in draft_entries:
+        entries_by_user[entry.user_id].append(entry)
 
     result = []
     for user in users:
+        entries = entries_by_user[user.id]
         players = []
         coach = None
-        for entry in user.draft_entries:
+        for entry in entries:
             if entry.player:
                 p = entry.player
                 players.append(PlayerBrief(
@@ -100,7 +119,7 @@ async def get_drafts(session: AsyncSession = Depends(get_db)):
         result.append(UserDraftResponse(
             user_id=user.id,
             username=user.username,
-            is_active=user.is_active,
+            is_active=sp_map.get(user.id, False),
             players=players,
             coach=coach,
         ))

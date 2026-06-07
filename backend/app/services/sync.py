@@ -7,7 +7,6 @@ from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import settings
 from app.database import AsyncSessionLocal
 from app.models.coach import Coach
 from app.models.event import Event
@@ -15,6 +14,7 @@ from app.models.event_type import EventType
 from app.models.fixture import Fixture, FixtureParticipant
 from app.models.lineup import Lineup
 from app.models.player import Player
+from app.models.season import Season
 from app.models.team import Team
 from app.sportmonks import client
 
@@ -55,6 +55,18 @@ async def _upsert_composite(
 
 
 # ---------------------------------------------------------------------------
+# Active season helper
+# ---------------------------------------------------------------------------
+
+async def _get_active_season(session: AsyncSession) -> Season:
+    result = await session.execute(select(Season).where(Season.is_active == True))  # noqa: E712
+    season = result.scalar_one_or_none()
+    if season is None:
+        raise RuntimeError("No active season configured. Create and activate a season first.")
+    return season
+
+
+# ---------------------------------------------------------------------------
 # Sync functions
 # ---------------------------------------------------------------------------
 
@@ -76,9 +88,10 @@ async def sync_event_types(session: AsyncSession) -> None:
 
 
 async def sync_teams(session: AsyncSession) -> None:
-    logger.info("Syncing teams, players, and coaches...")
+    season = await _get_active_season(session)
+    logger.info("Syncing teams, players, and coaches for season %s...", season.name)
     raw = await client.get_paginated(
-        "football", "teams", "seasons", settings.sm_season_id,
+        "football", "teams", "seasons", season.sm_season_id,
         params={"include": "players.player;coaches", "per_page": 50},
     )
 
@@ -103,6 +116,7 @@ async def sync_teams(session: AsyncSession) -> None:
             p = tp.get("player") or {}
             player_rows.append({
                 "id": p.get("id") or tp.get("player_id"),
+                "season_id": season.id,
                 "common_name": p.get("common_name"),
                 "display_name": p.get("display_name"),
                 "image_path": p.get("image_path"),
@@ -116,6 +130,7 @@ async def sync_teams(session: AsyncSession) -> None:
                 continue
             coach_rows.append({
                 "id": c["id"],
+                "season_id": season.id,
                 "name": c.get("name"),
                 "display_name": c.get("display_name"),
                 "image_path": c.get("image_path"),
@@ -137,9 +152,10 @@ async def sync_teams(session: AsyncSession) -> None:
 
 async def sync_fixtures(session: AsyncSession) -> None:
     """Sync fixtures from the schedules endpoint (data → stages → rounds → fixtures)."""
-    logger.info("Syncing fixtures...")
+    season = await _get_active_season(session)
+    logger.info("Syncing fixtures for season %s...", season.name)
     data = await client.get(
-        "football", "schedules", "seasons", settings.sm_season_id,
+        "football", "schedules", "seasons", season.sm_season_id,
     )
     raw_fixtures = _flatten_schedule_fixtures(data.get("data", []))
 
@@ -149,6 +165,7 @@ async def sync_fixtures(session: AsyncSession) -> None:
     for f in raw_fixtures:
         fixture_rows.append({
             "id": f["id"],
+            "season_id": season.id,
             "name": f.get("name"),
             "starting_at": _parse_dt(f.get("starting_at")),
             "state": _extract_state(f),
@@ -169,20 +186,24 @@ async def sync_fixtures(session: AsyncSession) -> None:
 
 
 async def sync_all_events(session: AsyncSession) -> None:
-    """Sync events for ALL fixtures regardless of state or time window. Used for historical data."""
-    logger.info("Syncing events for all fixtures...")
-    result = await session.execute(select(Fixture.id))
+    """Sync events for ALL fixtures of the active season regardless of state."""
+    season = await _get_active_season(session)
+    logger.info("Syncing events for all fixtures of season %s...", season.name)
+    result = await session.execute(
+        select(Fixture.id).where(Fixture.season_id == season.id)
+    )
     all_ids = list(result.scalars().all())
     if not all_ids:
-        logger.info("No fixtures found")
+        logger.info("No fixtures found for active season")
         return
     await _sync_events_for_fixtures(session, all_ids)
 
 
 async def sync_events(session: AsyncSession) -> None:
     """Sync events only for fixtures that are currently LIVE or recently finished."""
-    logger.info("Syncing events for active fixtures...")
-    active_ids = await _active_fixture_ids(session)
+    season = await _get_active_season(session)
+    logger.info("Syncing events for active fixtures of season %s...", season.name)
+    active_ids = await _active_fixture_ids(session, season.id)
     if not active_ids:
         logger.info("No active fixtures, skipping event sync")
         return
@@ -224,8 +245,9 @@ async def _sync_events_for_fixtures(session: AsyncSession, fixture_ids: list[int
 
 async def sync_lineups(session: AsyncSession) -> None:
     """Sync lineups for fixtures transitioning to LIVE."""
-    logger.info("Syncing lineups...")
-    active_ids = await _active_fixture_ids(session)
+    season = await _get_active_season(session)
+    logger.info("Syncing lineups for season %s...", season.name)
+    active_ids = await _active_fixture_ids(session, season.id)
     if not active_ids:
         return
 
@@ -258,14 +280,12 @@ def _flatten_schedule_fixtures(data: list | dict) -> list[dict]:
     fixtures: list[dict] = []
     items = data if isinstance(data, list) else [data]
     for item in items:
-        # Some schedule responses nest under "stages", others are round-level directly
         stages = item.get("stages") if isinstance(item, dict) else None
         rounds_src = stages if stages is not None else [item]
         for stage in (rounds_src if isinstance(rounds_src, list) else [rounds_src]):
             for round_ in (stage.get("rounds", []) if isinstance(stage, dict) else []):
                 for fixture in (round_.get("fixtures", []) if isinstance(round_, dict) else []):
                     fixtures.append(fixture)
-            # Also handle fixtures directly on stage (no rounds layer)
             for fixture in (stage.get("fixtures", []) if isinstance(stage, dict) else []):
                 fixtures.append(fixture)
     return fixtures
@@ -287,8 +307,8 @@ def _extract_state(fixture_data: dict) -> str | None:
     return state
 
 
-async def _active_fixture_ids(session: AsyncSession) -> list[int]:
-    """Return IDs of fixtures that are currently live or recently started."""
+async def _active_fixture_ids(session: AsyncSession, season_id: int) -> list[int]:
+    """Return IDs of fixtures for the given season that are live or recently started."""
     from datetime import timedelta
     from app.config import settings
 
@@ -298,6 +318,8 @@ async def _active_fixture_ids(session: AsyncSession) -> list[int]:
 
     result = await session.execute(
         select(Fixture.id).where(
+            Fixture.season_id == season_id,
+        ).where(
             (Fixture.starting_at >= window_start) & (Fixture.starting_at <= window_end)
             | (Fixture.state == "LIVE")
         )

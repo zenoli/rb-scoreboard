@@ -6,10 +6,11 @@ from app.database import Base
 
 class Draft(Base):
     __tablename__ = "drafts"
-    __table_args__ = (UniqueConstraint("user_id", "player_id", name="uq_draft_user_player"),)
+    __table_args__ = (UniqueConstraint("user_id", "player_id", "season_id", name="uq_draft_user_player_season"),)
 
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"))
     # Exactly one of player_id or coach_id is set per row
     player_id: Mapped[int | None] = mapped_column(ForeignKey("players.id"))
     coach_id: Mapped[int | None] = mapped_column(ForeignKey("coaches.id"))

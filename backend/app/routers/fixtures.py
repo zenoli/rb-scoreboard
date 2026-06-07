@@ -6,6 +6,7 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.fixture import Fixture, FixtureParticipant
+from app.models.season import Season
 
 router = APIRouter()
 
@@ -28,11 +29,17 @@ class FixtureResponse(BaseModel):
 
 @router.get("/fixtures", response_model=list[FixtureResponse])
 async def get_fixtures(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(
-        select(Fixture).options(
-            selectinload(Fixture.participants).selectinload(FixtureParticipant.team)
-        ).order_by(Fixture.starting_at)
-    )
+    season_result = await session.execute(select(Season).where(Season.is_active == True))  # noqa: E712
+    season = season_result.scalar_one_or_none()
+
+    stmt = select(Fixture).options(
+        selectinload(Fixture.participants).selectinload(FixtureParticipant.team)
+    ).order_by(Fixture.starting_at)
+
+    if season is not None:
+        stmt = stmt.where(Fixture.season_id == season.id)
+
+    result = await session.execute(stmt)
     fixtures = result.scalars().all()
     return [
         FixtureResponse(

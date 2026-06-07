@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.coach import Coach
 from app.models.player import Player
+from app.models.season import Season
 from app.services.scoring import ScoreEvent, compute_player_score_events
 
 router = APIRouter()
@@ -55,6 +56,12 @@ class ScoreEventResponse(BaseModel):
     fixture_name: str | None
 
 
+async def _get_active_season_id(session: AsyncSession) -> int | None:
+    result = await session.execute(select(Season).where(Season.is_active == True))  # noqa: E712
+    season = result.scalar_one_or_none()
+    return season.id if season else None
+
+
 @router.get("/players/{player_id}/events", response_model=list[ScoreEventResponse])
 async def get_player_score_events(player_id: int, session: AsyncSession = Depends(get_db)):
     events = await compute_player_score_events(session, player_id)
@@ -93,10 +100,14 @@ async def get_players(
     position_category: str | None = Query(None),
     session: AsyncSession = Depends(get_db),
 ):
+    season_id = await _get_active_season_id(session)
+
     stmt = select(Player).options(
         selectinload(Player.team),
         selectinload(Player.position),
     )
+    if season_id is not None:
+        stmt = stmt.where(Player.season_id == season_id)
     if team_id is not None:
         stmt = stmt.where(Player.team_id == team_id)
     if position_category is not None:
@@ -125,9 +136,12 @@ async def get_players(
 
 @router.get("/coaches", response_model=list[CoachResponse])
 async def get_coaches(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(
-        select(Coach).options(selectinload(Coach.team))
-    )
+    season_id = await _get_active_season_id(session)
+
+    stmt = select(Coach).options(selectinload(Coach.team))
+    if season_id is not None:
+        stmt = stmt.where(Coach.season_id == season_id)
+    result = await session.execute(stmt)
     coaches = result.scalars().all()
     return [
         CoachResponse(

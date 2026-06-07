@@ -10,6 +10,7 @@ from app.models.draft import Draft
 from app.models.player import Player
 from app.models.position import Position
 from app.models.scoring_rule import SCORE_KEYS, ScoringRule
+from app.models.season import Season, SeasonParticipant
 from app.models.team import Team
 from app.models.tournament_config import TournamentConfig
 from app.models.user import User
@@ -35,7 +36,7 @@ async def trigger_sync(target: str):
 
 
 # ---------------------------------------------------------------------------
-# Scoring rules
+# Scoring rules (per active season)
 # ---------------------------------------------------------------------------
 
 class ScoringRuleResponse(BaseModel):
@@ -51,7 +52,10 @@ class UpdateWeightRequest(BaseModel):
 
 @router.get("/scoring-rules", response_model=list[ScoringRuleResponse])
 async def list_scoring_rules(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(ScoringRule))
+    season = await _get_active_season_or_404(session)
+    result = await session.execute(
+        select(ScoringRule).where(ScoringRule.season_id == season.id)
+    )
     return result.scalars().all()
 
 
@@ -63,8 +67,12 @@ async def update_scoring_rule(
 ):
     if event_key not in SCORE_KEYS:
         raise HTTPException(status_code=400, detail=f"Unknown event key: {event_key}")
+    season = await _get_active_season_or_404(session)
     result = await session.execute(
-        select(ScoringRule).where(ScoringRule.event_key == event_key)
+        select(ScoringRule).where(
+            ScoringRule.event_key == event_key,
+            ScoringRule.season_id == season.id,
+        )
     )
     rule = result.scalar_one_or_none()
     if rule is None:
@@ -76,7 +84,7 @@ async def update_scoring_rule(
 
 
 # ---------------------------------------------------------------------------
-# Users
+# Users (is_active derived from SeasonParticipant for active season)
 # ---------------------------------------------------------------------------
 
 class UserAdminResponse(BaseModel):
@@ -84,8 +92,6 @@ class UserAdminResponse(BaseModel):
     username: str
     is_admin: bool
     is_active: bool
-
-    model_config = {"from_attributes": True}
 
 
 class CreateUserRequest(BaseModel):
@@ -99,8 +105,25 @@ class SetActiveRequest(BaseModel):
 
 @router.get("/users", response_model=list[UserAdminResponse])
 async def list_users(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(User))
-    return result.scalars().all()
+    season = await _get_active_season_or_404(session)
+
+    users_result = await session.execute(select(User))
+    users = list(users_result.scalars().all())
+
+    sp_result = await session.execute(
+        select(SeasonParticipant).where(SeasonParticipant.season_id == season.id)
+    )
+    sp_map = {sp.user_id: sp.is_active for sp in sp_result.scalars().all()}
+
+    return [
+        UserAdminResponse(
+            id=u.id,
+            username=u.username,
+            is_admin=u.is_admin,
+            is_active=sp_map.get(u.id, False),
+        )
+        for u in users
+    ]
 
 
 @router.post("/users", response_model=UserAdminResponse, status_code=status.HTTP_201_CREATED)
@@ -117,7 +140,7 @@ async def create_user(body: CreateUserRequest, session: AsyncSession = Depends(g
     session.add(user)
     await session.commit()
     await session.refresh(user)
-    return user
+    return UserAdminResponse(id=user.id, username=user.username, is_admin=user.is_admin, is_active=False)
 
 
 @router.put("/users/{user_id}/active", response_model=UserAdminResponse)
@@ -127,10 +150,18 @@ async def set_user_active(
     session: AsyncSession = Depends(get_db),
 ):
     user = await _get_user_or_404(session, user_id)
-    user.is_active = body.is_active
+    season = await _get_active_season_or_404(session)
+
+    sp = await _get_or_create_participant(session, user_id, season.id)
+    sp.is_active = body.is_active
     await session.commit()
-    await session.refresh(user)
-    return user
+
+    return UserAdminResponse(
+        id=user.id,
+        username=user.username,
+        is_admin=user.is_admin,
+        is_active=sp.is_active,
+    )
 
 
 @router.delete("/users/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
@@ -141,7 +172,7 @@ async def delete_user(user_id: int, session: AsyncSession = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# Drafts
+# Drafts (scoped to active season)
 # ---------------------------------------------------------------------------
 
 class DraftEntryResponse(BaseModel):
@@ -166,16 +197,28 @@ class AssignDraftRequest(BaseModel):
 @router.get("/drafts/{user_id}", response_model=UserDraftAdminResponse)
 async def get_user_draft(user_id: int, session: AsyncSession = Depends(get_db)):
     user = await _get_user_or_404(session, user_id)
+    season = await _get_active_season_or_404(session)
+
     result = await session.execute(
         select(Draft)
-        .where(Draft.user_id == user_id)
+        .where(Draft.user_id == user_id, Draft.season_id == season.id)
         .options(selectinload(Draft.player), selectinload(Draft.coach))
     )
     entries = result.scalars().all()
+
+    sp_result = await session.execute(
+        select(SeasonParticipant).where(
+            SeasonParticipant.user_id == user_id,
+            SeasonParticipant.season_id == season.id,
+        )
+    )
+    sp = sp_result.scalar_one_or_none()
+    is_active = sp.is_active if sp else False
+
     return UserDraftAdminResponse(
         user_id=user.id,
         username=user.username,
-        is_active=user.is_active,
+        is_active=is_active,
         entries=[
             DraftEntryResponse(
                 player_id=e.player_id,
@@ -195,20 +238,24 @@ async def assign_draft(
     session: AsyncSession = Depends(get_db),
 ):
     user = await _get_user_or_404(session, user_id)
-    await _validate_draft(session, body.player_ids, body.coach_id)
+    season = await _get_active_season_or_404(session)
+    await _validate_draft(session, season.id, body.player_ids, body.coach_id)
 
-    # Delete existing draft entries for this user
-    existing = await session.execute(select(Draft).where(Draft.user_id == user_id))
+    # Delete existing draft entries for this user + season
+    existing = await session.execute(
+        select(Draft).where(Draft.user_id == user_id, Draft.season_id == season.id)
+    )
     for entry in existing.scalars().all():
         await session.delete(entry)
 
     # Create new entries
     for pid in body.player_ids:
-        session.add(Draft(user_id=user_id, player_id=pid))
-    session.add(Draft(user_id=user_id, coach_id=body.coach_id))
+        session.add(Draft(user_id=user_id, season_id=season.id, player_id=pid))
+    session.add(Draft(user_id=user_id, season_id=season.id, coach_id=body.coach_id))
 
-    # Activate user
-    user.is_active = True
+    # Activate user for this season
+    sp = await _get_or_create_participant(session, user_id, season.id)
+    sp.is_active = True
     await session.commit()
 
     return await get_user_draft(user_id, session)
@@ -226,16 +273,17 @@ async def add_pick(
     session: AsyncSession = Depends(get_db),
 ):
     await _get_user_or_404(session, user_id)
+    season = await _get_active_season_or_404(session)
 
     if body.player_id is not None:
         player_result = await session.execute(
             select(Player)
-            .where(Player.id == body.player_id)
+            .where(Player.id == body.player_id, Player.season_id == season.id)
             .options(selectinload(Player.position), selectinload(Player.team))
         )
         player = player_result.scalar_one_or_none()
         if player is None:
-            raise HTTPException(status_code=404, detail=f"Player {body.player_id} not found")
+            raise HTTPException(status_code=404, detail=f"Player {body.player_id} not found in active season")
 
         cat = player.position.category if player.position else None
         if cat is None:
@@ -243,7 +291,7 @@ async def add_pick(
 
         existing_result = await session.execute(
             select(Draft)
-            .where(Draft.user_id == user_id, Draft.player_id.isnot(None))
+            .where(Draft.user_id == user_id, Draft.season_id == season.id, Draft.player_id.isnot(None))
             .options(
                 selectinload(Draft.player).selectinload(Player.position),
                 selectinload(Draft.player).selectinload(Player.team),
@@ -267,20 +315,22 @@ async def add_pick(
         ):
             raise HTTPException(status_code=400, detail="Player's team already in draft")
 
-        session.add(Draft(user_id=user_id, player_id=body.player_id))
+        session.add(Draft(user_id=user_id, season_id=season.id, player_id=body.player_id))
 
     elif body.coach_id is not None:
-        coach_result = await session.execute(select(Coach).where(Coach.id == body.coach_id))
+        coach_result = await session.execute(
+            select(Coach).where(Coach.id == body.coach_id, Coach.season_id == season.id)
+        )
         if coach_result.scalar_one_or_none() is None:
-            raise HTTPException(status_code=404, detail=f"Coach {body.coach_id} not found")
+            raise HTTPException(status_code=404, detail=f"Coach {body.coach_id} not found in active season")
 
         existing_coach = await session.execute(
-            select(Draft).where(Draft.user_id == user_id, Draft.coach_id.isnot(None))
+            select(Draft).where(Draft.user_id == user_id, Draft.season_id == season.id, Draft.coach_id.isnot(None))
         )
         for e in existing_coach.scalars().all():
             await session.delete(e)
 
-        session.add(Draft(user_id=user_id, coach_id=body.coach_id))
+        session.add(Draft(user_id=user_id, season_id=season.id, coach_id=body.coach_id))
 
     else:
         raise HTTPException(status_code=400, detail="Provide player_id or coach_id")
@@ -297,17 +347,26 @@ async def remove_pick(
     session: AsyncSession = Depends(get_db),
 ):
     await _get_user_or_404(session, user_id)
+    season = await _get_active_season_or_404(session)
 
     if player_id is not None:
         result = await session.execute(
-            select(Draft).where(Draft.user_id == user_id, Draft.player_id == player_id)
+            select(Draft).where(
+                Draft.user_id == user_id,
+                Draft.season_id == season.id,
+                Draft.player_id == player_id,
+            )
         )
         entry = result.scalar_one_or_none()
         if entry:
             await session.delete(entry)
     elif coach_id is not None:
         result = await session.execute(
-            select(Draft).where(Draft.user_id == user_id, Draft.coach_id == coach_id)
+            select(Draft).where(
+                Draft.user_id == user_id,
+                Draft.season_id == season.id,
+                Draft.coach_id == coach_id,
+            )
         )
         entry = result.scalar_one_or_none()
         if entry:
@@ -321,6 +380,7 @@ async def remove_pick(
 
 async def _validate_draft(
     session: AsyncSession,
+    season_id: int,
     player_ids: list[int],
     coach_id: int,
 ) -> None:
@@ -329,19 +389,17 @@ async def _validate_draft(
     if len(set(player_ids)) != 16:
         raise HTTPException(status_code=400, detail="Duplicate players in draft")
 
-    # Load players with positions and teams
     result = await session.execute(
         select(Player)
-        .where(Player.id.in_(player_ids))
+        .where(Player.id.in_(player_ids), Player.season_id == season_id)
         .options(selectinload(Player.position), selectinload(Player.team))
     )
     players = result.scalars().all()
     if len(players) != 16:
         found = {p.id for p in players}
         missing = set(player_ids) - found
-        raise HTTPException(status_code=400, detail=f"Players not found: {missing}")
+        raise HTTPException(status_code=400, detail=f"Players not found in active season: {missing}")
 
-    # Validate position composition: 1 GK, 5 DEF, 5 MID, 5 FWD
     category_counts: dict[str, int] = {}
     for p in players:
         cat = p.position.category if p.position else None
@@ -360,19 +418,19 @@ async def _validate_draft(
                 detail=f"Expected {count} {cat}, got {category_counts.get(cat, 0)}",
             )
 
-    # Validate at most one player per team
     team_ids = [p.team_id for p in players if p.team_id]
     if len(team_ids) != len(set(team_ids)):
         raise HTTPException(status_code=400, detail="Multiple players from the same team")
 
-    # Validate coach exists
-    coach_result = await session.execute(select(Coach).where(Coach.id == coach_id))
+    coach_result = await session.execute(
+        select(Coach).where(Coach.id == coach_id, Coach.season_id == season_id)
+    )
     if coach_result.scalar_one_or_none() is None:
-        raise HTTPException(status_code=400, detail=f"Coach {coach_id} not found")
+        raise HTTPException(status_code=400, detail=f"Coach {coach_id} not found in active season")
 
 
 # ---------------------------------------------------------------------------
-# Tournament winner
+# Tournament winner (per active season)
 # ---------------------------------------------------------------------------
 
 class SetWinnerRequest(BaseModel):
@@ -386,7 +444,8 @@ class TournamentConfigResponse(BaseModel):
 
 @router.get("/tournament/winner", response_model=TournamentConfigResponse)
 async def get_tournament_winner(session: AsyncSession = Depends(get_db)):
-    tc = await _get_or_create_tournament_config(session)
+    season = await _get_active_season_or_404(session)
+    tc = await _get_or_create_tournament_config(session, season.id)
     team_name = None
     if tc.winner_team_id:
         team_result = await session.execute(
@@ -410,7 +469,8 @@ async def set_tournament_winner(
     if team is None:
         raise HTTPException(status_code=404, detail=f"Team {body.team_id} not found")
 
-    tc = await _get_or_create_tournament_config(session)
+    season = await _get_active_season_or_404(session)
+    tc = await _get_or_create_tournament_config(session, season.id)
     tc.winner_team_id = body.team_id
     await session.commit()
     return TournamentConfigResponse(
@@ -465,12 +525,39 @@ async def _get_user_or_404(session: AsyncSession, user_id: int) -> User:
     return user
 
 
-async def _get_or_create_tournament_config(session: AsyncSession) -> TournamentConfig:
-    result = await session.execute(select(TournamentConfig))
+async def _get_active_season_or_404(session: AsyncSession) -> Season:
+    result = await session.execute(select(Season).where(Season.is_active == True))  # noqa: E712
+    season = result.scalar_one_or_none()
+    if season is None:
+        raise HTTPException(status_code=503, detail="No active season configured")
+    return season
+
+
+async def _get_or_create_tournament_config(session: AsyncSession, season_id: int) -> TournamentConfig:
+    result = await session.execute(
+        select(TournamentConfig).where(TournamentConfig.season_id == season_id)
+    )
     tc = result.scalar_one_or_none()
     if tc is None:
-        tc = TournamentConfig(id=1)
+        tc = TournamentConfig(season_id=season_id)
         session.add(tc)
         await session.commit()
         await session.refresh(tc)
     return tc
+
+
+async def _get_or_create_participant(
+    session: AsyncSession, user_id: int, season_id: int
+) -> SeasonParticipant:
+    result = await session.execute(
+        select(SeasonParticipant).where(
+            SeasonParticipant.user_id == user_id,
+            SeasonParticipant.season_id == season_id,
+        )
+    )
+    sp = result.scalar_one_or_none()
+    if sp is None:
+        sp = SeasonParticipant(user_id=user_id, season_id=season_id, is_active=False)
+        session.add(sp)
+        await session.flush()
+    return sp

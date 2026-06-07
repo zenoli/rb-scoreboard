@@ -10,6 +10,7 @@ class Fixture(Base):
     __tablename__ = "fixtures"
 
     id: Mapped[int] = mapped_column(primary_key=True)  # Sportmonks ID
+    season_id: Mapped[int | None] = mapped_column(ForeignKey("seasons.id"))
     name: Mapped[str | None] = mapped_column(String)
     starting_at: Mapped[datetime | None] = mapped_column(DateTime)
     state: Mapped[str | None] = mapped_column(String)  # NS, LIVE, FT, AET, PEN, etc.

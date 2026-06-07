@@ -7,6 +7,7 @@ from app.models.lineup import Lineup
 from app.models.player import Player
 from app.models.position import Position
 from app.models.scoring_rule import ScoringRule
+from app.models.season import Season, SeasonParticipant
 from app.models.team import Team
 from app.models.tournament_config import TournamentConfig
 from app.models.user import User
@@ -22,6 +23,8 @@ __all__ = [
     "Player",
     "Position",
     "ScoringRule",
+    "Season",
+    "SeasonParticipant",
     "Team",
     "TournamentConfig",
     "User",

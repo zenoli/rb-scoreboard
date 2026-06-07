@@ -30,6 +30,7 @@ class UserScoreResponse(BaseModel):
 
 
 class ScoreboardResponse(BaseModel):
+    season_name: str | None
     users: list[UserScoreResponse]
 
 
@@ -82,8 +83,9 @@ async def get_user_score_events(user_id: int, session: AsyncSession = Depends(ge
 
 @router.get("/scores", response_model=ScoreboardResponse)
 async def get_scores(session: AsyncSession = Depends(get_db)):
-    scores = await compute_scores(session)
+    scores, season_name = await compute_scores(session)
     return ScoreboardResponse(
+        season_name=season_name,
         users=[
             UserScoreResponse(
                 user_id=s.user_id,
@@ -98,5 +100,5 @@ async def get_scores(session: AsyncSession = Depends(get_db)):
                 total=s.total,
             )
             for s in sorted(scores, key=lambda x: x.total, reverse=True)
-        ]
+        ],
     )

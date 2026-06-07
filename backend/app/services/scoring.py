@@ -17,6 +17,7 @@ from app.models.lineup import Lineup
 from app.models.player import Player
 from app.models.position import Position
 from app.models.scoring_rule import ScoringRule
+from app.models.season import Season, SeasonParticipant
 from app.models.tournament_config import TournamentConfig
 from app.models.user import User
 
@@ -57,49 +58,73 @@ class UserScore:
         )
 
 
-async def compute_scores(session: AsyncSession) -> list[UserScore]:
-    # Load scoring weights
-    weights = await _load_weights(session)
+async def _get_active_season(session: AsyncSession) -> Season | None:
+    result = await session.execute(select(Season).where(Season.is_active == True))  # noqa: E712
+    return result.scalar_one_or_none()
 
-    # Load all users with their draft entries
-    users_result = await session.execute(
-        select(User).options(
-            selectinload(User.draft_entries)
-            .selectinload(Draft.player)
-            .selectinload(Player.position),
-            selectinload(User.draft_entries).selectinload(Draft.coach),
-        )
+
+async def compute_scores(session: AsyncSession) -> tuple[list[UserScore], str | None]:
+    """Returns (scores, season_name). season_name is None if no active season."""
+    season = await _get_active_season(session)
+    if season is None:
+        return [], None
+
+    weights = await _load_weights(session, season.id)
+
+    # Load all season participants
+    sp_result = await session.execute(
+        select(SeasonParticipant).where(SeasonParticipant.season_id == season.id)
     )
+    participants = {sp.user_id: sp.is_active for sp in sp_result.scalars().all()}
+
+    # Load all users
+    users_result = await session.execute(select(User))
     users: list[User] = list(users_result.scalars().all())
 
-    # Load tournament winner team_id
-    tc_result = await session.execute(select(TournamentConfig))
+    # Load draft entries for this season
+    drafts_result = await session.execute(
+        select(Draft)
+        .where(Draft.season_id == season.id)
+        .options(
+            selectinload(Draft.player).selectinload(Player.position),
+            selectinload(Draft.coach),
+        )
+    )
+    draft_entries = list(drafts_result.scalars().all())
+
+    # Load tournament winner for this season
+    tc_result = await session.execute(
+        select(TournamentConfig).where(TournamentConfig.season_id == season.id)
+    )
     tc = tc_result.scalar_one_or_none()
     winner_team_id = tc.winner_team_id if tc else None
 
-    # Build player_id → set of user_ids lookup
+    # Build lookup structures
     player_to_users: dict[int, list[int]] = {}
     user_scores: dict[int, UserScore] = {}
     user_draft_player_ids: dict[int, set[int]] = {}
     user_coach_team_id: dict[int, int | None] = {}
 
     for user in users:
-        us = UserScore(user_id=user.id, username=user.username, is_active=user.is_active)
+        is_active = participants.get(user.id, False)
+        us = UserScore(user_id=user.id, username=user.username, is_active=is_active)
         user_scores[user.id] = us
-        player_ids = set()
-        coach_team = None
-        for entry in user.draft_entries:
-            if entry.player_id:
-                player_to_users.setdefault(entry.player_id, []).append(user.id)
-                player_ids.add(entry.player_id)
-            if entry.coach_id and entry.coach and entry.coach.team_id:
-                coach_team = entry.coach.team_id
-        user_draft_player_ids[user.id] = player_ids
-        user_coach_team_id[user.id] = coach_team
+        user_draft_player_ids[user.id] = set()
+        user_coach_team_id[user.id] = None
 
-    # Load all events with their type
+    for entry in draft_entries:
+        if entry.player_id:
+            player_to_users.setdefault(entry.player_id, []).append(entry.user_id)
+            user_draft_player_ids[entry.user_id].add(entry.player_id)
+        if entry.coach_id and entry.coach and entry.coach.team_id:
+            user_coach_team_id[entry.user_id] = entry.coach.team_id
+
+    # Load events for fixtures of this season
     events_result = await session.execute(
-        select(Event).options(selectinload(Event.event_type))
+        select(Event)
+        .join(Fixture, Event.fixture_id == Fixture.id)
+        .where(Fixture.season_id == season.id)
+        .options(selectinload(Event.event_type))
     )
     events: list[Event] = list(events_result.scalars().all())
 
@@ -120,14 +145,12 @@ async def compute_scores(session: AsyncSession) -> list[UserScore]:
             elif dev_name in _RED_TYPES:
                 us.red_cards += weights["red_card"]
 
-        # Assists are stored as a separate event with related_player_id
-        # (also handle the case where assist comes via related_player_id on a goal event)
         if dev_name in _GOAL_TYPES and event.related_player_id:
             for uid in player_to_users.get(event.related_player_id, []):
                 user_scores[uid].assists += weights["assist"]
 
     # Clean sheet calculation
-    await _apply_clean_sheets(session, user_scores, user_draft_player_ids, weights)
+    await _apply_clean_sheets(session, season.id, user_scores, user_draft_player_ids, weights)
 
     # Coach winner bonus
     if winner_team_id is not None:
@@ -135,17 +158,20 @@ async def compute_scores(session: AsyncSession) -> list[UserScore]:
             if team_id == winner_team_id:
                 user_scores[uid].coach_winner += weights["coach_winner"]
 
-    return list(user_scores.values())
+    return list(user_scores.values()), season.name
 
 
 async def _apply_clean_sheets(
     session: AsyncSession,
+    season_id: int,
     user_scores: dict[int, "UserScore"],
     user_draft_player_ids: dict[int, set[int]],
     weights: dict[str, float],
 ) -> None:
     fixtures_result = await session.execute(
-        select(Fixture).options(
+        select(Fixture)
+        .where(Fixture.season_id == season_id)
+        .options(
             selectinload(Fixture.participants),
             selectinload(Fixture.events).selectinload(Event.event_type),
             selectinload(Fixture.lineups),
@@ -154,7 +180,10 @@ async def _apply_clean_sheets(
     fixtures: list[Fixture] = list(fixtures_result.scalars().all())
 
     gk_result = await session.execute(
-        select(Player.id).join(Position).where(Position.category == "GK")
+        select(Player.id)
+        .join(Position)
+        .where(Position.category == "GK")
+        .where(Player.season_id == season_id)
     )
     gk_ids = set(gk_result.scalars().all())
 
@@ -200,19 +229,19 @@ def _keeper_played(
     came_on = player_id in sub_on_events
 
     if is_starter:
-        # Subbed off before minute 1?
         subbed_off_at = sub_off_events.get(player_id, 999)
         return subbed_off_at > 1
 
     if came_on:
-        # Came on at or before minute 89
         return sub_on_events[player_id] <= 89
 
     return False
 
 
-async def _load_weights(session: AsyncSession) -> dict[str, float]:
-    result = await session.execute(select(ScoringRule))
+async def _load_weights(session: AsyncSession, season_id: int) -> dict[str, float]:
+    result = await session.execute(
+        select(ScoringRule).where(ScoringRule.season_id == season_id)
+    )
     rules = result.scalars().all()
     return {r.event_key: r.weight for r in rules}
 
@@ -236,25 +265,36 @@ class ScoreHistory:
 
 
 async def compute_score_history(session: AsyncSession) -> ScoreHistory:
-    """Returns cumulative score totals per user grouped by UTC match day.
+    season = await _get_active_season(session)
+    if season is None:
+        return ScoreHistory(dates=[], series=[])
 
-    Only completed fixtures (FT, AET, FT_PEN) are included. Scores are
-    accumulated incrementally across match days so the last point matches
-    the live scoreboard total.
-    """
-    weights = await _load_weights(session)
+    weights = await _load_weights(session, season.id)
 
-    users_result = await session.execute(
-        select(User).options(
-            selectinload(User.draft_entries)
-            .selectinload(Draft.player)
-            .selectinload(Player.position),
-            selectinload(User.draft_entries).selectinload(Draft.coach),
-        )
+    # Load season participants
+    sp_result = await session.execute(
+        select(SeasonParticipant).where(SeasonParticipant.season_id == season.id)
     )
+    participants = {sp.user_id: sp.is_active for sp in sp_result.scalars().all()}
+
+    # Load all users
+    users_result = await session.execute(select(User))
     users: list[User] = list(users_result.scalars().all())
 
-    tc_result = await session.execute(select(TournamentConfig))
+    # Load draft entries for this season
+    drafts_result = await session.execute(
+        select(Draft)
+        .where(Draft.season_id == season.id)
+        .options(
+            selectinload(Draft.player).selectinload(Player.position),
+            selectinload(Draft.coach),
+        )
+    )
+    draft_entries = list(drafts_result.scalars().all())
+
+    tc_result = await session.execute(
+        select(TournamentConfig).where(TournamentConfig.season_id == season.id)
+    )
     tc = tc_result.scalar_one_or_none()
     winner_team_id = tc.winner_team_id if tc else None
 
@@ -265,27 +305,28 @@ async def compute_score_history(session: AsyncSession) -> ScoreHistory:
     gk_ids: set[int] = set()
 
     for user in users:
-        us = UserScore(user_id=user.id, username=user.username, is_active=user.is_active)
+        is_active = participants.get(user.id, False)
+        us = UserScore(user_id=user.id, username=user.username, is_active=is_active)
         user_scores[user.id] = us
-        player_ids: set[int] = set()
-        coach_team = None
-        for entry in user.draft_entries:
-            if entry.player_id:
-                player_to_users.setdefault(entry.player_id, []).append(user.id)
-                player_ids.add(entry.player_id)
-                if (
-                    entry.player
-                    and entry.player.position
-                    and entry.player.position.category == "GK"
-                ):
-                    gk_ids.add(entry.player_id)
-            if entry.coach_id and entry.coach and entry.coach.team_id:
-                coach_team = entry.coach.team_id
-        user_draft_player_ids[user.id] = player_ids
-        user_coach_team_id[user.id] = coach_team
+        user_draft_player_ids[user.id] = set()
+        user_coach_team_id[user.id] = None
+
+    for entry in draft_entries:
+        if entry.player_id:
+            player_to_users.setdefault(entry.player_id, []).append(entry.user_id)
+            user_draft_player_ids[entry.user_id].add(entry.player_id)
+            if (
+                entry.player
+                and entry.player.position
+                and entry.player.position.category == "GK"
+            ):
+                gk_ids.add(entry.player_id)
+        if entry.coach_id and entry.coach and entry.coach.team_id:
+            user_coach_team_id[entry.user_id] = entry.coach.team_id
 
     fixtures_result = await session.execute(
         select(Fixture)
+        .where(Fixture.season_id == season.id)
         .where(Fixture.state.in_(["FT", "AET", "FT_PEN"]))
         .where(Fixture.starting_at.isnot(None))
         .options(
@@ -317,12 +358,10 @@ async def compute_score_history(session: AsyncSession) -> ScoreHistory:
             ],
         )
 
-    # snapshots[i] = {user_id: cumulative_total} for sorted_dates[i]
     snapshots: list[dict[int, float]] = []
 
     for d in sorted_dates:
         for fixture in fixtures_by_date[d]:
-            # Regular events
             for event in fixture.events:
                 if not event.player_id or not event.event_type:
                     continue
@@ -341,7 +380,6 @@ async def compute_score_history(session: AsyncSession) -> ScoreHistory:
                     for uid in player_to_users.get(event.related_player_id, []):
                         user_scores[uid].assists += weights["assist"]
 
-            # Clean sheets for this fixture
             goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
             fixture_team_ids = {p.team_id for p in fixture.participants}
             for uid, player_ids in user_draft_player_ids.items():
@@ -358,7 +396,6 @@ async def compute_score_history(session: AsyncSession) -> ScoreHistory:
 
         snapshots.append({uid: user_scores[uid].total for uid in active_user_ids})
 
-    # Apply coach_winner bonus to the last snapshot
     if winner_team_id is not None and snapshots:
         for uid, team_id in user_coach_team_id.items():
             if uid in snapshots[-1] and team_id == winner_team_id:
@@ -383,12 +420,16 @@ async def compute_score_history(session: AsyncSession) -> ScoreHistory:
 
 
 async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int, float]:
-    """Returns player_id → total points for all players in a user's draft."""
-    weights = await _load_weights(session)
+    """Returns player_id → total points for all players in a user's draft (active season)."""
+    season = await _get_active_season(session)
+    if season is None:
+        return {}
+
+    weights = await _load_weights(session, season.id)
 
     draft_result = await session.execute(
         select(Draft)
-        .where(Draft.user_id == user_id)
+        .where(Draft.user_id == user_id, Draft.season_id == season.id)
         .options(selectinload(Draft.player).selectinload(Player.position))
     )
     draft_entries = list(draft_result.scalars().all())
@@ -400,6 +441,8 @@ async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int
 
     events_result = await session.execute(
         select(Event)
+        .join(Fixture, Event.fixture_id == Fixture.id)
+        .where(Fixture.season_id == season.id)
         .where((Event.player_id.in_(player_ids)) | (Event.related_player_id.in_(player_ids)))
         .options(selectinload(Event.event_type))
     )
@@ -419,14 +462,13 @@ async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int
         if dev in _GOAL_TYPES and event.related_player_id in player_ids:
             player_points[event.related_player_id] += weights["assist"]
 
-    # Clean sheets for GK players in this draft
     gk_ids = {
         e.player_id
         for e in draft_entries
         if e.player_id and e.player and e.player.position and e.player.position.category == "GK"
     }
     if gk_ids:
-        cs = await _per_player_clean_sheets(session, gk_ids, weights)
+        cs = await _per_player_clean_sheets(session, season.id, gk_ids, weights)
         for pid, pts in cs.items():
             player_points[pid] = player_points.get(pid, 0.0) + pts
 
@@ -434,10 +476,12 @@ async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int
 
 
 async def _per_player_clean_sheets(
-    session: AsyncSession, gk_ids: set[int], weights: dict[str, float]
+    session: AsyncSession, season_id: int, gk_ids: set[int], weights: dict[str, float]
 ) -> dict[int, float]:
     fixtures_result = await session.execute(
-        select(Fixture).options(
+        select(Fixture)
+        .where(Fixture.season_id == season_id)
+        .options(
             selectinload(Fixture.participants),
             selectinload(Fixture.events).selectinload(Event.event_type),
             selectinload(Fixture.lineups),
@@ -463,7 +507,6 @@ async def _per_player_clean_sheets(
 def _parse_fixture_events(
     fixture: "Fixture",
 ) -> tuple[dict[int, int], dict[int, int], dict[int, int], dict[int, int]]:
-    """Returns (goals_conceded, starter_ids, sub_on, sub_off) for a fixture."""
     goals_conceded: dict[int, int] = {}
     starter_ids: dict[int, int] = {}
     sub_on: dict[int, int] = {}
@@ -512,28 +555,28 @@ class ScoreEvent:
 
 
 async def compute_user_score_events(session: AsyncSession, user_id: int) -> list[ScoreEvent]:
-    """Returns all scoring events for a user, including synthetic clean sheet / coach_winner rows."""
-    weights = await _load_weights(session)
+    season = await _get_active_season(session)
+    if season is None:
+        return []
 
-    # Load user's draft with player and coach details
-    user_result = await session.execute(
-        select(User)
-        .where(User.id == user_id)
+    weights = await _load_weights(session, season.id)
+
+    draft_result = await session.execute(
+        select(Draft)
+        .where(Draft.user_id == user_id, Draft.season_id == season.id)
         .options(
-            selectinload(User.draft_entries).selectinload(Draft.player).selectinload(Player.team),
-            selectinload(User.draft_entries).selectinload(Draft.player).selectinload(Player.position),
-            selectinload(User.draft_entries).selectinload(Draft.coach).selectinload(Coach.team),
+            selectinload(Draft.player).selectinload(Player.team),
+            selectinload(Draft.player).selectinload(Player.position),
+            selectinload(Draft.coach).selectinload(Coach.team),
         )
     )
-    user = user_result.scalar_one_or_none()
-    if not user:
-        return []
+    draft_entries = list(draft_result.scalars().all())
 
     player_map: dict[int, "Player"] = {}
     gk_ids: set[int] = set()
     coach = None
 
-    for entry in user.draft_entries:
+    for entry in draft_entries:
         if entry.player:
             player_map[entry.player.id] = entry.player
             if entry.player.position and entry.player.position.category == "GK":
@@ -543,15 +586,15 @@ async def compute_user_score_events(session: AsyncSession, user_id: int) -> list
 
     player_ids = set(player_map.keys())
 
-    # Load events for these players
     events_result = await session.execute(
         select(Event)
+        .join(Fixture, Event.fixture_id == Fixture.id)
+        .where(Fixture.season_id == season.id)
         .where((Event.player_id.in_(player_ids)) | (Event.related_player_id.in_(player_ids)))
         .options(selectinload(Event.event_type))
     )
     events = list(events_result.scalars().all())
 
-    # Load fixtures involved (with participants + teams)
     fixture_ids = {e.fixture_id for e in events if e.fixture_id}
     fixture_map: dict[int, Fixture] = {}
     if fixture_ids:
@@ -569,7 +612,6 @@ async def compute_user_score_events(session: AsyncSession, user_id: int) -> list
             continue
         dev = (event.event_type.developer_name or "").upper()
 
-        # Determine player and event type
         pid: int | None = None
         event_type: str | None = None
         pts: float = 0.0
@@ -609,13 +651,13 @@ async def compute_user_score_events(session: AsyncSession, user_id: int) -> list
             )
         )
 
-    # Clean sheet events
     if gk_ids:
-        cs_events = await _clean_sheet_events(session, gk_ids, player_map, weights)
+        cs_events = await _clean_sheet_events(session, season.id, gk_ids, player_map, weights)
         score_events.extend(cs_events)
 
-    # Coach winner
-    tc_result = await session.execute(select(TournamentConfig))
+    tc_result = await session.execute(
+        select(TournamentConfig).where(TournamentConfig.season_id == season.id)
+    )
     tc = tc_result.scalar_one_or_none()
     if tc and tc.winner_team_id and coach and coach.team_id == tc.winner_team_id:
         score_events.append(
@@ -638,8 +680,12 @@ async def compute_user_score_events(session: AsyncSession, user_id: int) -> list
 
 
 async def compute_player_score_events(session: AsyncSession, player_id: int) -> list[ScoreEvent]:
-    """Returns all scoring events for a single player, regardless of draft context."""
-    weights = await _load_weights(session)
+    """Returns all scoring events for a single player (active season)."""
+    season = await _get_active_season(session)
+    if season is None:
+        return []
+
+    weights = await _load_weights(session, season.id)
 
     player_result = await session.execute(
         select(Player)
@@ -654,6 +700,8 @@ async def compute_player_score_events(session: AsyncSession, player_id: int) -> 
 
     events_result = await session.execute(
         select(Event)
+        .join(Fixture, Event.fixture_id == Fixture.id)
+        .where(Fixture.season_id == season.id)
         .where((Event.player_id == player_id) | (Event.related_player_id == player_id))
         .options(selectinload(Event.event_type))
     )
@@ -715,7 +763,7 @@ async def compute_player_score_events(session: AsyncSession, player_id: int) -> 
         )
 
     if is_gk:
-        cs_events = await _clean_sheet_events(session, {player_id}, player_map, weights)
+        cs_events = await _clean_sheet_events(session, season.id, {player_id}, player_map, weights)
         score_events.extend(cs_events)
 
     return sorted(score_events, key=lambda e: (e.minute is None, e.minute or 0))
@@ -732,12 +780,15 @@ def _get_opponent_team(fixture: "Fixture | None", team_id: int | None):
 
 async def _clean_sheet_events(
     session: AsyncSession,
+    season_id: int,
     gk_ids: set[int],
     player_map: dict[int, "Player"],
     weights: dict[str, float],
 ) -> list[ScoreEvent]:
     fixtures_result = await session.execute(
-        select(Fixture).options(
+        select(Fixture)
+        .where(Fixture.season_id == season_id)
+        .options(
             selectinload(Fixture.participants).selectinload(FixtureParticipant.team),
             selectinload(Fixture.events).selectinload(Event.event_type),
             selectinload(Fixture.lineups),

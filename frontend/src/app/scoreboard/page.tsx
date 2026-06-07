@@ -196,7 +196,12 @@ export default function ScoreboardPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">Scoreboard</h1>
+        <div>
+          <h1 className="text-xl font-semibold">Scoreboard</h1>
+          {data.season_name && (
+            <span className="text-xs text-muted-foreground">{data.season_name}</span>
+          )}
+        </div>
         {lastUpdated && (
           <span className="text-xs text-muted-foreground">
             Updated {lastUpdated.toLocaleTimeString()}
