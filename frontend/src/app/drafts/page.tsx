@@ -158,7 +158,8 @@ export default function DraftsPage() {
                     imagePath={d.coach.image_path}
                     name={d.coach.display_name}
                     teamImagePath={d.coach.team_image_path}
-                    size={40}
+                    size={48}
+                    avatarClassName="ring-2 ring-white shadow-md"
                   />
                   <div>
                     <div className="text-xs text-muted-foreground">Coach</div>

@@ -47,7 +47,7 @@ export function PlayerIcon({
 
       {showFlag && (
         <div
-          className="absolute rounded-full overflow-hidden ring-1 ring-background shadow-sm"
+          className="absolute rounded-full overflow-hidden shadow-sm"
           style={{
             width: badgeSize,
             height: badgeSize,
@@ -67,7 +67,7 @@ export function PlayerIcon({
 
       {showPoints && (
         <div
-          className="absolute rounded-full bg-primary text-primary-foreground font-bold flex items-center justify-center shadow ring-1 ring-background"
+          className="absolute rounded-full bg-black text-white font-bold flex items-center justify-center shadow"
           style={{
             width: badgeSize,
             height: badgeSize,

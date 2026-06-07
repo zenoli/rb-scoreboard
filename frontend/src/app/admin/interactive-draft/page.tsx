@@ -174,27 +174,36 @@ function UserPitch({
       </div>
 
       {/* Coach */}
-      <div className="flex justify-center">
+      <div className="flex justify-center py-1">
         {draft.coach ? (
-          <button
-            onClick={onRemoveCoach}
-            className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:bg-accent group max-w-full"
-          >
-            <PlayerIcon
-              imagePath={draft.coach.image_path}
-              name={draft.coach.display_name}
-              teamImagePath={draft.coach.team_image_path}
-              size={20}
-            />
-            <span className="truncate">{draft.coach.display_name}</span>
-            <span className="text-destructive opacity-0 group-hover:opacity-100 text-[10px] flex-shrink-0">✕</span>
+          <button onClick={onRemoveCoach} className="flex flex-col items-center gap-0.5 group">
+            <div className="relative">
+              <PlayerIcon
+                imagePath={draft.coach.image_path}
+                name={draft.coach.display_name}
+                teamImagePath={draft.coach.team_image_path}
+                size={56}
+                avatarClassName="ring-2 ring-white shadow"
+              />
+              <div className="absolute inset-0 bg-red-500/70 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity" style={{ zIndex: 20 }}>
+                <span className="text-white text-xs font-bold">✕</span>
+              </div>
+            </div>
+            <span className="text-[11px] text-white font-medium truncate max-w-[60px] leading-none">
+              {draft.coach.display_name?.split(' ').pop() ?? ''}
+            </span>
           </button>
         ) : (
           <button
             onClick={onCoachClick}
-            className="flex items-center gap-1 rounded-md border border-dashed px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+            className="flex flex-col items-center gap-0.5 group"
           >
-            + Coach
+            <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
+              <svg className="w-6 h-6 text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M10 10a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+              </svg>
+            </div>
+            <span className="text-[11px] text-white/50 leading-none">Coach</span>
           </button>
         )}
       </div>
