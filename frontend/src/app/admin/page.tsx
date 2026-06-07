@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import type { AdminUser, Season } from '@/lib/types'
 
-const SYNC_TARGETS = ['teams', 'fixtures', 'events', 'types', 'lineups', 'positions']
+const SYNC_TARGETS = ['teams', 'fixtures', 'events', 'event_types', 'lineups']
 
 export default function AdminPage() {
   const [apiKey, setApiKey] = useState('')

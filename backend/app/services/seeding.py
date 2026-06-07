@@ -10,10 +10,10 @@ from app.models.season import Season
 
 # Sportmonks v3 position IDs are fixed constants
 POSITIONS = [
-    {"id": 1, "name": "Goalkeeper", "code": "GK", "category": "GK"},
-    {"id": 2, "name": "Defender",   "code": "DEF", "category": "DEF"},
-    {"id": 3, "name": "Midfielder", "code": "MID", "category": "MID"},
-    {"id": 4, "name": "Attacker",   "code": "FWD", "category": "FWD"},
+    {"id": 24, "name": "Goalkeeper", "code": "GK", "category": "GK"},
+    {"id": 25, "name": "Defender",   "code": "DEF", "category": "DEF"},
+    {"id": 26, "name": "Midfielder", "code": "MID", "category": "MID"},
+    {"id": 27, "name": "Attacker",   "code": "FWD", "category": "FWD"},
 ]
 
 DEFAULT_WEIGHTS = {
