@@ -27,6 +27,19 @@ async function post(path: string, adminKey: string) {
   return res.json()
 }
 
+async function postJson(path: string, body: unknown, adminKey: string) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Admin-Key': adminKey },
+    body: JSON.stringify(body),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.detail ?? `${res.status} ${res.statusText}`)
+  }
+  return res.json()
+}
+
 export const api = {
   scores: () => get('/api/scores'),
   scoreEvents: (userId: number) => get(`/api/scores/${userId}/events`),
@@ -40,6 +53,10 @@ export const api = {
   },
   coaches: () => get('/api/coaches'),
   adminUsers: (key: string) => get('/admin/users', key),
+  createUser: (body: { username: string; email: string; password: string }, key: string) =>
+    postJson('/admin/users', body, key),
+  setUserActive: (userId: number, is_active: boolean, key: string) =>
+    put(`/admin/users/${userId}/active`, { is_active }, key),
   adminDraft: (userId: number, key: string) => get(`/admin/drafts/${userId}`, key),
   assignDraft: (userId: number, body: { player_ids: number[]; coach_id: number }, key: string) =>
     put(`/admin/drafts/${userId}`, body, key),

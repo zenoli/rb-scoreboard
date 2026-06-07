@@ -15,6 +15,11 @@ export default function AdminPage() {
   const [error, setError] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<Record<string, string>>({})
 
+  const [modalOpen, setModalOpen] = useState(false)
+  const [form, setForm] = useState({ username: '', email: '', password: '' })
+  const [formError, setFormError] = useState<string | null>(null)
+  const [formLoading, setFormLoading] = useState(false)
+
   useEffect(() => {
     const stored = localStorage.getItem('admin_api_key') ?? ''
     setSavedKey(stored)
@@ -42,6 +47,30 @@ export default function AdminPage() {
       setSyncStatus((s) => ({ ...s, [target]: res.message ?? 'done' }))
     } catch (e) {
       setSyncStatus((s) => ({ ...s, [target]: e instanceof Error ? e.message : 'error' }))
+    }
+  }
+
+  async function handleCreateUser() {
+    setFormLoading(true)
+    setFormError(null)
+    try {
+      const user = await api.createUser(form, savedKey)
+      setUsers((prev) => prev ? [...prev, user] : [user])
+      setModalOpen(false)
+      setForm({ username: '', email: '', password: '' })
+    } catch (e) {
+      setFormError(e instanceof Error ? e.message : 'Failed to create user')
+    } finally {
+      setFormLoading(false)
+    }
+  }
+
+  async function toggleActive(user: AdminUser) {
+    try {
+      const updated = await api.setUserActive(user.id, !user.is_active, savedKey)
+      setUsers((prev) => prev ? prev.map((u) => u.id === user.id ? updated : u) : prev)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to update user')
     }
   }
 
@@ -96,7 +125,15 @@ export default function AdminPage() {
 
           {/* Users */}
           <section className="rounded-lg border p-4 bg-card flex flex-col gap-3">
-            <h2 className="font-medium text-sm">Users</h2>
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium text-sm">Users</h2>
+              <button
+                onClick={() => { setModalOpen(true); setFormError(null) }}
+                className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors"
+              >
+                + Add user
+              </button>
+            </div>
             {!users && <div className="h-8 bg-muted animate-pulse rounded" />}
             {users && (
               <div className="flex flex-col gap-2">
@@ -110,6 +147,12 @@ export default function AdminPage() {
                       <Badge variant={u.is_active ? 'default' : 'outline'} className="text-xs">
                         {u.is_active ? 'Active' : 'Inactive'}
                       </Badge>
+                      <button
+                        onClick={() => toggleActive(u)}
+                        className="text-xs text-muted-foreground hover:text-foreground underline transition-colors"
+                      >
+                        {u.is_active ? 'Deactivate' : 'Activate'}
+                      </button>
                       <Link
                         href={`/admin/drafts/${u.id}`}
                         className="text-xs underline text-primary hover:no-underline"
@@ -123,6 +166,55 @@ export default function AdminPage() {
             )}
           </section>
         </>
+      )}
+
+      {/* Create user modal */}
+      {modalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg border p-6 w-full max-w-sm flex flex-col gap-4 mx-4">
+            <h2 className="font-semibold text-base">Add user</h2>
+            <div className="flex flex-col gap-3">
+              <input
+                type="text"
+                placeholder="Username"
+                value={form.username}
+                onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <input
+                type="email"
+                placeholder="Email"
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={form.password}
+                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+              />
+            </div>
+            {formError && <p className="text-xs text-destructive">{formError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setModalOpen(false); setForm({ username: '', email: '', password: '' }) }}
+                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                disabled={formLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleCreateUser}
+                disabled={formLoading || !form.username || !form.email || !form.password}
+                className="rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+              >
+                {formLoading ? 'Creating…' : 'Create'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

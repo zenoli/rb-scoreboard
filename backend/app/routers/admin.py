@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -14,6 +14,7 @@ from app.models.team import Team
 from app.models.tournament_config import TournamentConfig
 from app.models.user import User
 from app.routers.deps import require_admin_key
+from app.services.auth import hash_password
 
 router = APIRouter(dependencies=[Depends(require_admin_key)])
 
@@ -88,10 +89,51 @@ class UserAdminResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class CreateUserRequest(BaseModel):
+    username: str
+    email: EmailStr
+    password: str
+
+
+class SetActiveRequest(BaseModel):
+    is_active: bool
+
+
 @router.get("/users", response_model=list[UserAdminResponse])
 async def list_users(session: AsyncSession = Depends(get_db)):
     result = await session.execute(select(User))
     return result.scalars().all()
+
+
+@router.post("/users", response_model=UserAdminResponse, status_code=status.HTTP_201_CREATED)
+async def create_user(body: CreateUserRequest, session: AsyncSession = Depends(get_db)):
+    existing = await session.execute(
+        select(User).where((User.username == body.username) | (User.email == body.email))
+    )
+    if existing.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Username or email already taken")
+    user = User(
+        username=body.username,
+        email=body.email,
+        password_hash=hash_password(body.password),
+    )
+    session.add(user)
+    await session.commit()
+    await session.refresh(user)
+    return user
+
+
+@router.put("/users/{user_id}/active", response_model=UserAdminResponse)
+async def set_user_active(
+    user_id: int,
+    body: SetActiveRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    user = await _get_user_or_404(session, user_id)
+    user.is_active = body.is_active
+    await session.commit()
+    await session.refresh(user)
+    return user
 
 
 # ---------------------------------------------------------------------------
