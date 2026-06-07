@@ -322,14 +322,15 @@ function PickModal({
             <div className="grid grid-cols-8 gap-x-2 gap-y-2">
               {countries.map((country) => {
                 const isSelected = countryFilter === country.id
+                const isDrafted = userTeamIds.has(country.id)
                 return (
                   <button
                     key={country.id}
-                    onClick={() => setCountryFilter(isSelected ? null : country.id)}
+                    onClick={() => !isDrafted && setCountryFilter(isSelected ? null : country.id)}
                     title={country.name}
                     className="flex flex-col items-center gap-0.5"
                   >
-                    <div className={`w-8 h-8 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-1' : ''}`}>
+                    <div className={`w-8 h-8 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-1' : ''} ${isDrafted ? 'grayscale' : ''}`}>
                       {country.image_path ? (
                         // eslint-disable-next-line @next/next/no-img-element
                         <img src={country.image_path} alt={country.name} className="w-full h-full object-cover scale-150" />
@@ -339,7 +340,7 @@ function PickModal({
                         </div>
                       )}
                     </div>
-                    <span className="text-[9px] leading-none text-muted-foreground">
+                    <span className={`text-[9px] leading-none ${isDrafted ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
                       {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
                     </span>
                   </button>
