@@ -21,8 +21,8 @@ function EmptySlot({ label, onClick }: { label: string; onClick: () => void }) {
       onClick={onClick}
       className="flex flex-col items-center gap-0.5 group"
     >
-      <div className="w-9 h-9 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
-        <svg className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+      <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
+        <svg className="w-6 h-6 text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
           <path d="M10 10a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
         </svg>
       </div>
@@ -42,7 +42,7 @@ function FilledSlot({
 }) {
   return (
     <button onClick={onRemove} className="flex flex-col items-center gap-0.5 group">
-      <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow bg-muted">
+      <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow bg-muted">
         {imagePath ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imagePath} alt={name ?? ''} className="w-full h-full object-cover" />
@@ -55,7 +55,7 @@ function FilledSlot({
           <span className="text-white text-xs font-bold">✕</span>
         </div>
       </div>
-      <span className="text-[8px] text-white font-medium truncate max-w-[40px] leading-none">
+      <span className="text-[8px] text-white font-medium truncate max-w-[60px] leading-none">
         {name?.split(' ').pop() ?? ''}
       </span>
     </button>
@@ -541,10 +541,10 @@ export default function InteractiveDraftPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+      <div className="flex flex-wrap justify-center gap-4">
         {draftUsers.map((draft) => (
+          <div key={draft.user_id} className="w-90 flex-shrink-0">
           <UserPitch
-            key={draft.user_id}
             draft={draft}
             onSlotClick={(position) =>
               setModal({ userId: draft.user_id, username: draft.username, position })
@@ -555,6 +555,7 @@ export default function InteractiveDraftPage() {
             }
             onRemoveCoach={() => draft.coach && handleRemoveCoach(draft.user_id, draft.coach.id)}
           />
+          </div>
         ))}
       </div>
 
