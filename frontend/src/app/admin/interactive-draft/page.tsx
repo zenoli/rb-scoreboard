@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { CoachResponse, PlayerResponse, UserDraft } from '@/lib/types'
 
@@ -57,24 +58,25 @@ function EmptySlot({ label, onClick }: { label: string; onClick: () => void }) {
 function FilledSlot({
   name,
   imagePath,
+  teamImagePath,
   onRemove,
 }: {
   name: string | null
   imagePath: string | null
+  teamImagePath: string | null
   onRemove: () => void
 }) {
   return (
     <button onClick={onRemove} className="flex flex-col items-center gap-0.5 group">
-      <div className="relative w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow bg-muted">
-        {imagePath ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={imagePath} alt={name ?? ''} className="w-full h-full object-cover" />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-muted-foreground">
-            {(name ?? '?').slice(0, 2).toUpperCase()}
-          </div>
-        )}
-        <div className="absolute inset-0 bg-red-500/70 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+      <div className="relative">
+        <PlayerIcon
+          imagePath={imagePath}
+          name={name}
+          teamImagePath={teamImagePath}
+          size={56}
+          avatarClassName="ring-2 ring-white shadow"
+        />
+        <div className="absolute inset-0 bg-red-500/70 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity" style={{ zIndex: 20 }}>
           <span className="text-white text-xs font-bold">✕</span>
         </div>
       </div>
@@ -91,7 +93,7 @@ function PositionRow({
   onEmptyClick,
   onFilledClick,
 }: {
-  slots: ({ id: number; display_name: string | null; image_path: string | null } | null)[]
+  slots: ({ id: number; display_name: string | null; image_path: string | null; team_image_path: string | null } | null)[]
   position: string
   onEmptyClick: (slotIndex: number) => void
   onFilledClick: (playerId: number) => void
@@ -104,6 +106,7 @@ function PositionRow({
             key={player.id}
             name={player.display_name}
             imagePath={player.image_path}
+            teamImagePath={player.team_image_path}
             onRemove={() => onFilledClick(player.id)}
           />
         ) : (
@@ -129,7 +132,7 @@ function UserPitch({
   onCoachClick: () => void
   onRemoveCoach: () => void
 }) {
-  const playerById = new Map(draft.players.map((p) => [p.id, p]))
+  const playerById = new Map(draft.players.map((p) => [p.id, { ...p, team_image_path: p.team_image_path ?? null }]))
 
   function getSlotsForPos(pos: string) {
     const ids = slotState.get(slotKey(draft.user_id, pos)) ?? Array(REQUIRED[pos]).fill(null)
@@ -177,16 +180,12 @@ function UserPitch({
             onClick={onRemoveCoach}
             className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:bg-accent group max-w-full"
           >
-            <div className="w-5 h-5 rounded-full overflow-hidden bg-muted border flex-shrink-0">
-              {draft.coach.image_path ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={draft.coach.image_path} alt={draft.coach.display_name ?? ''} className="w-full h-full object-cover" />
-              ) : (
-                <div className="w-full h-full flex items-center justify-center text-[8px]">
-                  {(draft.coach.display_name ?? '?').slice(0, 2).toUpperCase()}
-                </div>
-              )}
-            </div>
+            <PlayerIcon
+              imagePath={draft.coach.image_path}
+              name={draft.coach.display_name}
+              teamImagePath={draft.coach.team_image_path}
+              size={20}
+            />
             <span className="truncate">{draft.coach.display_name}</span>
             <span className="text-destructive opacity-0 group-hover:opacity-100 text-[10px] flex-shrink-0">✕</span>
           </button>
@@ -366,16 +365,12 @@ function PickModal({
                         isTaken ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accent'
                       }`}
                     >
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-muted border flex-shrink-0">
-                        {c.image_path ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={c.image_path} alt={c.display_name ?? ''} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                            {(c.display_name ?? '?').slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
+                      <PlayerIcon
+                        imagePath={c.image_path}
+                        name={c.display_name}
+                        teamImagePath={c.team_image_path}
+                        size={32}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{c.display_name}</div>
                         <div className="text-xs text-muted-foreground">{c.team_name}</div>
@@ -403,16 +398,12 @@ function PickModal({
                         disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accent'
                       }`}
                     >
-                      <div className="w-8 h-8 rounded-full overflow-hidden bg-muted border flex-shrink-0">
-                        {p.image_path ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img src={p.image_path} alt={p.display_name ?? ''} className="w-full h-full object-cover" />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                            {(p.display_name ?? '?').slice(0, 2).toUpperCase()}
-                          </div>
-                        )}
-                      </div>
+                      <PlayerIcon
+                        imagePath={p.image_path}
+                        name={p.display_name}
+                        teamImagePath={p.team_image_path}
+                        size={32}
+                      />
                       <div className="flex-1 min-w-0">
                         <div className="text-sm font-medium truncate">{p.display_name}</div>
                         <div className="text-xs text-muted-foreground">{p.team_name}</div>

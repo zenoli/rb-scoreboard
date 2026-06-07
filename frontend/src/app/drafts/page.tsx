@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { PlayerBrief, PlayerPoints, UserDraft } from '@/lib/types'
 
@@ -14,25 +15,14 @@ function PlayerPin({
 }) {
   return (
     <div className="flex flex-col items-center gap-1">
-      <div className="relative">
-        <div className="w-12 h-12 rounded-full overflow-hidden border-2 border-white shadow-md bg-muted">
-          {player.image_path ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={player.image_path}
-              alt={player.display_name ?? ''}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
-              {(player.display_name ?? '?').slice(0, 2).toUpperCase()}
-            </div>
-          )}
-        </div>
-        <span className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground text-[10px] font-bold rounded-full px-1 min-w-[16px] text-center leading-4 shadow">
-          {points % 1 === 0 ? points : points.toFixed(1)}
-        </span>
-      </div>
+      <PlayerIcon
+        imagePath={player.image_path}
+        name={player.display_name}
+        teamImagePath={player.team_image_path}
+        points={points}
+        size={48}
+        avatarClassName="ring-2 ring-white shadow-md"
+      />
       <span className="text-[10px] text-white font-medium text-center leading-tight max-w-[56px] truncate drop-shadow">
         {player.display_name?.split(' ').pop() ?? ''}
       </span>
@@ -164,16 +154,12 @@ export default function DraftsPage() {
               <FootballPitch draft={d} pointsMap={pts} />
               {d.coach && (
                 <div className="mt-4 flex items-center gap-3 rounded-lg border p-3 bg-card max-w-sm mx-auto">
-                  <div className="w-10 h-10 rounded-full overflow-hidden bg-muted border flex-shrink-0">
-                    {d.coach.image_path ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={d.coach.image_path} alt={d.coach.display_name ?? ''} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-xs font-bold text-muted-foreground">
-                        {(d.coach.display_name ?? '?').slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+                  <PlayerIcon
+                    imagePath={d.coach.image_path}
+                    name={d.coach.display_name}
+                    teamImagePath={d.coach.team_image_path}
+                    size={40}
+                  />
                   <div>
                     <div className="text-xs text-muted-foreground">Coach</div>
                     <div className="font-medium text-sm">{d.coach.display_name}</div>

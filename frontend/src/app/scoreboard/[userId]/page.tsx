@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
+import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { ScoreEvent } from '@/lib/types'
 
@@ -15,20 +16,6 @@ const EVENT_LABELS: Record<string, { label: string; emoji: string; variant: 'def
   coach_winner: { label: 'Winner', emoji: '🏆', variant: 'default' },
 }
 
-function PlayerAvatar({ src, name }: { src: string | null; name: string | null }) {
-  return (
-    <div className="w-10 h-10 rounded-full overflow-hidden bg-muted flex-shrink-0 border">
-      {src ? (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img src={src} alt={name ?? ''} className="w-full h-full object-cover" />
-      ) : (
-        <div className="w-full h-full flex items-center justify-center text-sm font-medium text-muted-foreground">
-          {(name ?? '?').slice(0, 1)}
-        </div>
-      )}
-    </div>
-  )
-}
 
 function TeamFlag({ src, name }: { src: string | null; name: string | null }) {
   if (!src) return <span className="text-xs text-muted-foreground">{name ?? '—'}</span>
@@ -83,7 +70,12 @@ export default function ScoreDetailPage() {
                 key={i}
                 className="flex items-center gap-3 rounded-lg border p-3 bg-card"
               >
-                <PlayerAvatar src={ev.player_image_path} name={ev.player_name} />
+                <PlayerIcon
+                  imagePath={ev.player_image_path}
+                  name={ev.player_name}
+                  teamImagePath={ev.team_image_path}
+                  size={40}
+                />
 
                 <div className="flex-1 min-w-0">
                   <div className="font-medium text-sm truncate">{ev.player_name ?? 'Unknown'}</div>

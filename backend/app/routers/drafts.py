@@ -21,6 +21,7 @@ class PlayerBrief(BaseModel):
     display_name: str | None
     image_path: str | None
     team_name: str | None
+    team_image_path: str | None
     position_category: str | None
 
     model_config = {"from_attributes": True}
@@ -31,6 +32,7 @@ class CoachBrief(BaseModel):
     display_name: str | None
     image_path: str | None
     team_name: str | None
+    team_image_path: str | None
 
     model_config = {"from_attributes": True}
 
@@ -83,6 +85,7 @@ async def get_drafts(session: AsyncSession = Depends(get_db)):
                     display_name=p.display_name,
                     image_path=p.image_path,
                     team_name=p.team.name if p.team else None,
+                    team_image_path=p.team.image_path if p.team else None,
                     position_category=p.position.category if p.position else None,
                 ))
             if entry.coach:
@@ -92,6 +95,7 @@ async def get_drafts(session: AsyncSession = Depends(get_db)):
                     display_name=c.display_name,
                     image_path=c.image_path,
                     team_name=c.team.name if c.team else None,
+                    team_image_path=c.team.image_path if c.team else None,
                 )
         result.append(UserDraftResponse(
             user_id=user.id,

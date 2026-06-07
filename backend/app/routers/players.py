@@ -35,6 +35,7 @@ class CoachResponse(BaseModel):
     image_path: str | None
     team_id: int | None
     team_name: str | None
+    team_image_path: str | None
 
     model_config = {"from_attributes": True}
 
@@ -89,6 +90,7 @@ async def get_coaches(session: AsyncSession = Depends(get_db)):
             image_path=c.image_path,
             team_id=c.team_id,
             team_name=c.team.name if c.team else None,
+            team_image_path=c.team.image_path if c.team else None,
         )
         for c in coaches
     ]

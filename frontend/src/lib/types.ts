@@ -34,6 +34,7 @@ export interface PlayerBrief {
   display_name: string | null
   image_path: string | null
   team_name: string | null
+  team_image_path: string | null
   position_category: string | null
 }
 
@@ -42,6 +43,7 @@ export interface CoachBrief {
   display_name: string | null
   image_path: string | null
   team_name: string | null
+  team_image_path: string | null
 }
 
 export interface UserDraft {
@@ -79,6 +81,7 @@ export interface CoachResponse {
   image_path: string | null
   team_id: number | null
   team_name: string | null
+  team_image_path: string | null
 }
 
 export interface ScoringRule {

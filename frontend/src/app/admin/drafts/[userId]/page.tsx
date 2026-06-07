@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
+import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { CoachResponse, PlayerResponse } from '@/lib/types'
 
@@ -242,16 +243,12 @@ export default function AdminDraftPage() {
                         : 'hover:bg-accent'
                     }`}
                   >
-                    <div className="w-8 h-8 rounded-full overflow-hidden bg-muted border flex-shrink-0">
-                      {p.image_path ? (
-                        // eslint-disable-next-line @next/next/no-img-element
-                        <img src={p.image_path} alt={p.display_name ?? ''} className="w-full h-full object-cover" />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                          {(p.display_name ?? '?').slice(0, 2).toUpperCase()}
-                        </div>
-                      )}
-                    </div>
+                    <PlayerIcon
+                      imagePath={p.image_path}
+                      name={p.display_name}
+                      teamImagePath={p.team_image_path}
+                      size={32}
+                    />
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium truncate">{p.display_name}</div>
                       <div className="text-xs text-muted-foreground">{p.team_name}</div>
@@ -280,16 +277,12 @@ export default function AdminDraftPage() {
                     isSelected ? 'bg-primary/10 border-primary' : 'hover:bg-accent'
                   }`}
                 >
-                  <div className="w-8 h-8 rounded-full overflow-hidden bg-muted border flex-shrink-0">
-                    {c.image_path ? (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img src={c.image_path} alt={c.display_name ?? ''} className="w-full h-full object-cover" />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
-                        {(c.display_name ?? '?').slice(0, 2).toUpperCase()}
-                      </div>
-                    )}
-                  </div>
+                  <PlayerIcon
+                    imagePath={c.image_path}
+                    name={c.display_name}
+                    teamImagePath={c.team_image_path}
+                    size={32}
+                  />
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium truncate">{c.display_name}</div>
                     <div className="text-xs text-muted-foreground">{c.team_name}</div>
