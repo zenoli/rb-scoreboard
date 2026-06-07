@@ -14,7 +14,7 @@ function PlayerPin({
   points: number
 }) {
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div className="flex flex-col items-center gap-2">
       <PlayerIcon
         imagePath={player.image_path}
         name={player.display_name}

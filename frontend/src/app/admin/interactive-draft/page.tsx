@@ -67,7 +67,7 @@ function FilledSlot({
   onRemove: () => void
 }) {
   return (
-    <button onClick={onRemove} className="flex flex-col items-center gap-0.5 group">
+    <button onClick={onRemove} className="flex flex-col items-center gap-2 group">
       <div className="relative">
         <PlayerIcon
           imagePath={imagePath}
@@ -176,7 +176,7 @@ function UserPitch({
       {/* Coach */}
       <div className="flex justify-center py-1">
         {draft.coach ? (
-          <button onClick={onRemoveCoach} className="flex flex-col items-center gap-0.5 group">
+          <button onClick={onRemoveCoach} className="flex flex-col items-center gap-2 group">
             <div className="relative">
               <PlayerIcon
                 imagePath={draft.coach.image_path}
