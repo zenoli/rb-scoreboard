@@ -29,6 +29,10 @@ dev = [
     "httpx>=0.27",
 ]
 
+[project.scripts]
+alembic = "alembic.config:main"
+uvicorn = "uvicorn.main:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["app*"]
