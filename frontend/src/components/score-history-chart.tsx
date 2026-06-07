@@ -9,21 +9,27 @@ import {
 } from 'recharts'
 import {
   ChartContainer,
-  ChartLegend,
-  ChartLegendContent,
   ChartTooltip,
   ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
 import type { ScoreHistoryResponse } from '@/lib/types'
 
-const CHART_COLORS = [
+export const CHART_COLORS = [
   'var(--chart-1)',
   'var(--chart-2)',
   'var(--chart-3)',
   'var(--chart-4)',
   'var(--chart-5)',
 ]
+
+export function chartColorForUserId(
+  userId: number,
+  series: { user_id: number }[]
+): string | undefined {
+  const idx = series.findIndex((s) => s.user_id === userId)
+  return idx >= 0 ? CHART_COLORS[idx % CHART_COLORS.length] : undefined
+}
 
 function formatDate(iso: unknown) {
   if (typeof iso !== 'string') return String(iso ?? '')
@@ -73,7 +79,6 @@ export function ScoreHistoryChart({ data }: { data: ScoreHistoryResponse }) {
             />
           }
         />
-        <ChartLegend content={<ChartLegendContent />} />
         {data.series.map((s, i) => (
           <Line
             key={s.username}

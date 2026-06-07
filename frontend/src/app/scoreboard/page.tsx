@@ -22,7 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import type { ScoreboardResponse, ScoreHistoryResponse, UserScore } from '@/lib/types'
-import { ScoreHistoryChart } from '@/components/score-history-chart'
+import { ScoreHistoryChart, chartColorForUserId } from '@/components/score-history-chart'
 import {
   Target,
   Handshake,
@@ -73,18 +73,32 @@ function ScoreCell({ column, value }: { column: Column<Row>; value: number }) {
   )
 }
 
-const columnDefs: ColumnDef<Row>[] = [
-  {
+function nameColumnDef(historySeries: { user_id: number }[]): ColumnDef<Row> {
+  return {
     accessorKey: 'username',
     header: () => (
       <div className="flex translate-y-2 items-end text-[0.6rem] font-bold uppercase">
         Name
       </div>
     ),
-    cell: ({ getValue }) => (
-      <div className="text-left font-medium">{getValue<string>()}</div>
-    ),
-  },
+    cell: ({ row, getValue }) => {
+      const color = chartColorForUserId(row.original.user_id, historySeries)
+      return (
+        <div className="flex items-center gap-2 font-medium">
+          {color && (
+            <span
+              className="shrink-0 rounded-full size-2"
+              style={{ backgroundColor: color }}
+            />
+          )}
+          {getValue<string>()}
+        </div>
+      )
+    },
+  }
+}
+
+const columnDefs: ColumnDef<Row>[] = [
   {
     accessorKey: 'goals',
     header: ({ column }) => <ColHeader name="Goal" icon={Target} column={column} />,
@@ -138,6 +152,11 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval)
   }, [])
 
+  const columns = useMemo(
+    () => [nameColumnDef(history?.series ?? []), ...columnDefs],
+    [history?.series]
+  )
+
   const rows: Row[] = useMemo(
     () =>
       (data?.users ?? [])
@@ -148,7 +167,7 @@ export default function ScoreboardPage() {
 
   const table = useReactTable({
     data: rows,
-    columns: columnDefs,
+    columns,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     onSortingChange: setSorting,
