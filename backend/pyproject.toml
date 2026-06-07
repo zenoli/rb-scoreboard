@@ -19,6 +19,7 @@ dependencies = [
     "python-jose[cryptography]>=3.3",
     "apscheduler>=3.10",
     "python-multipart>=0.0.9",
+    "aiofiles>=23.0",
 ]
 
 [project.optional-dependencies]

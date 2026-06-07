@@ -1,15 +1,7 @@
-'use client'
+import UserDetailPage from './_page'
 
-import { useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+export function generateStaticParams() { return [] }
 
-export default function UserDetailPage() {
-  const params = useParams()
-  const router = useRouter()
-
-  useEffect(() => {
-    router.replace(`/scoreboard/${params.userId}/score-events`)
-  }, [params.userId, router])
-
-  return null
+export default function Page() {
+  return <UserDetailPage />
 }

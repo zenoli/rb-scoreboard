@@ -1,18 +1,37 @@
 {
-  description = "rb-scoreboard development environment";
+  description = "rb-scoreboard";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
-    flake-utils.url = "github:numtide/flake-utils";
+    flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
-        pkgs = nixpkgs.legacyPackages.${system};
-      in
-      {
-        devShells.default = import ./shell.nix { inherit pkgs; };
-      }
-    );
+  outputs =
+    { self, flake-parts, ... }@inputs:
+    flake-parts.lib.mkFlake { inherit inputs; } {
+      systems = [
+        "x86_64-linux"
+        "aarch64-linux"
+        "x86_64-darwin"
+        "aarch64-darwin"
+      ];
+
+      imports = [
+        ./nix/packages.nix
+      ];
+
+      flake = {
+        overlays.default = final: prev: {
+          rb-scoreboard = self.packages.${final.system}.default;
+        };
+
+        nixosModules.default = import ./nix/module.nix;
+      };
+
+      perSystem =
+        { pkgs, ... }:
+        {
+          devShells.default = import ./shell.nix { inherit pkgs; };
+        };
+    };
 }

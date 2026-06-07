@@ -27,5 +27,8 @@ class Settings(BaseSettings):
     # Scoring defaults
     coach_winner_points: float = 10.0
 
+    # Static frontend files (set by Nix wrapper in production)
+    static_dir: str | None = None
+
 
 settings = Settings()
