@@ -195,9 +195,6 @@ export default function ScoreboardPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
-      <div className="flex justify-center mb-6">
-        <Image src="/wc2026-logo.svg" alt="FIFA World Cup 2026" width={48} height={74} priority className="dark:invert" />
-      </div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-xl font-semibold">Scoreboard</h1>
         {lastUpdated && (
