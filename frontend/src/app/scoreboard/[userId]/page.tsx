@@ -163,7 +163,7 @@ export default function ScoreDetailPage() {
                 const Icon = meta.icon
                 return (
                   <div key={key}>
-                    <div className="sticky top-0 z-10 bg-background/80 backdrop-blur-sm flex items-center gap-2 py-2 mb-2">
+                    <div className="sticky top-14 z-20 bg-background/80 backdrop-blur-sm flex items-center gap-2 py-2 mb-2">
                       <Icon size={16} className="text-muted-foreground" />
                       <span className="text-sm font-semibold">{meta.label}</span>
                     </div>
