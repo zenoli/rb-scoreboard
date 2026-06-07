@@ -183,7 +183,7 @@ export default function AdminDraftPage() {
                 disabled={isDrafted}
                 title={country.name}
                 className={`flex flex-col items-center gap-1 transition-all ${
-                  isDrafted ? 'cursor-not-allowed' : isSelected ? '' : 'opacity-60 hover:opacity-100'
+                  isDrafted ? 'cursor-not-allowed' : ''
                 }`}
               >
                 <div className={`w-9 h-9 rounded-full overflow-hidden transition-all ${
