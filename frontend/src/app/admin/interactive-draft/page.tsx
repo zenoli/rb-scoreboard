@@ -560,8 +560,7 @@ export default function InteractiveDraftPage() {
     )
   }
 
-  // Exclude admin users from the draft grid — only show non-admin users
-  const draftUsers = drafts.filter((d) => !d.is_active || true) // show all users
+  const draftUsers = drafts.filter((d) => d.is_active)
 
   return (
     <div className="px-4 py-6 flex flex-col gap-4">
