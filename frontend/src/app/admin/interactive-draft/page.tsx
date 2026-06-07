@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useMemo, useState } from 'react'
+import { AnimatePresence, motion } from 'framer-motion'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { CoachResponse, PlayerResponse, UserDraft } from '@/lib/types'
@@ -141,7 +142,7 @@ function UserPitch({
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-xs font-semibold text-center truncate px-1">{draft.username}</div>
+      <div className="text-2xl font-bold text-center truncate px-1">{draft.username}</div>
 
       {/* Pitch */}
       <div
@@ -293,11 +294,21 @@ function PickModal({
     .filter((c) => !search || (c.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
 
   return (
-    <div
+    <motion.div
       className="fixed inset-0 z-50 flex items-start justify-center bg-black/50 px-4 pt-[10vh] pb-4"
       onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.15 }}
     >
-      <div className="bg-background rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]">
+      <motion.div
+        className="bg-background rounded-xl shadow-xl w-full max-w-lg flex flex-col max-h-[85vh]"
+        initial={{ y: 40, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 40, opacity: 0 }}
+        transition={{ duration: 0.15, ease: 'easeOut' }}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
           <div>
@@ -439,8 +450,8 @@ function PickModal({
             )}
           </div>
         </div>
-      </div>
-    </div>
+      </motion.div>
+    </motion.div>
   )
 }
 
@@ -587,16 +598,18 @@ export default function InteractiveDraftPage() {
         ))}
       </div>
 
-      {modal && (
-        <PickModal
-          modal={modal}
-          players={players}
-          coaches={coaches}
-          allDrafts={drafts}
-          onPick={handlePick}
-          onClose={() => setModal(null)}
-        />
-      )}
+      <AnimatePresence>
+        {modal && (
+          <PickModal
+            modal={modal}
+            players={players}
+            coaches={coaches}
+            allDrafts={drafts}
+            onPick={handlePick}
+            onClose={() => setModal(null)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
