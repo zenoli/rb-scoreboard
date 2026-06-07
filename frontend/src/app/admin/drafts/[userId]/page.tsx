@@ -194,7 +194,7 @@ export default function AdminDraftPage() {
                     <img
                       src={country.image_path}
                       alt={country.name}
-                      className="w-full h-full object-cover"
+                      className="w-full h-full object-cover scale-150"
                     />
                   ) : (
                     <div className="w-full h-full bg-muted flex items-center justify-center text-[9px] font-medium">
