@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import Link from 'next/link'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
@@ -14,7 +15,7 @@ function PlayerPin({
   points: number
 }) {
   return (
-    <div className="flex flex-col items-center gap-2">
+    <Link href={`/player/${player.id}`} className="flex flex-col items-center gap-2">
       <PlayerIcon
         imagePath={player.image_path}
         name={player.display_name}
@@ -26,7 +27,7 @@ function PlayerPin({
       <span className="text-[10px] text-white font-medium text-center leading-tight max-w-[56px] truncate drop-shadow">
         {player.display_name?.split(' ').pop() ?? ''}
       </span>
-    </div>
+    </Link>
   )
 }
 

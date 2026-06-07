@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +7,7 @@ from sqlalchemy.orm import selectinload
 from app.database import get_db
 from app.models.coach import Coach
 from app.models.player import Player
+from app.services.scoring import ScoreEvent, compute_player_score_events
 
 router = APIRouter()
 
@@ -38,6 +39,52 @@ class CoachResponse(BaseModel):
     team_image_path: str | None
 
     model_config = {"from_attributes": True}
+
+
+class ScoreEventResponse(BaseModel):
+    player_id: int | None
+    player_name: str | None
+    player_image_path: str | None
+    team_name: str | None
+    team_image_path: str | None
+    opponent_name: str | None
+    opponent_image_path: str | None
+    event_type: str
+    minute: int | None
+    points: float
+    fixture_name: str | None
+
+
+@router.get("/players/{player_id}/events", response_model=list[ScoreEventResponse])
+async def get_player_score_events(player_id: int, session: AsyncSession = Depends(get_db)):
+    events = await compute_player_score_events(session, player_id)
+    return [ScoreEventResponse(**e.__dict__) for e in events]
+
+
+@router.get("/players/{player_id}", response_model=PlayerResponse)
+async def get_player(player_id: int, session: AsyncSession = Depends(get_db)):
+    result = await session.execute(
+        select(Player)
+        .where(Player.id == player_id)
+        .options(selectinload(Player.team), selectinload(Player.position))
+    )
+    p = result.scalar_one_or_none()
+    if not p:
+        raise HTTPException(status_code=404, detail="Player not found")
+    return PlayerResponse(
+        id=p.id,
+        display_name=p.display_name,
+        common_name=p.common_name,
+        image_path=p.image_path,
+        jersey_number=p.jersey_number,
+        team_id=p.team_id,
+        team_name=p.team.name if p.team else None,
+        team_image_path=p.team.image_path if p.team else None,
+        team_short_code=p.team.short_code if p.team else None,
+        position_id=p.position_id,
+        position_name=p.position.name if p.position else None,
+        position_category=p.position.category if p.position else None,
+    )
 
 
 @router.get("/players", response_model=list[PlayerResponse])

@@ -1,12 +1,11 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { Badge } from '@/components/ui/badge'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
-import type { ScoreEvent, UserScore } from '@/lib/types'
+import type { PlayerResponse, ScoreEvent } from '@/lib/types'
 import {
   Target,
   Handshake,
@@ -66,32 +65,16 @@ function EventCard({ ev, meta }: { ev: ScoreEvent; meta: CategoryMeta }) {
   const bookingBadge = BOOKING_BADGE[ev.event_type]
   const badgeVariant = bookingBadge?.variant ?? meta.badgeVariant
   const badgeLabel = bookingBadge?.label ?? meta.label
-  const playerLink = ev.player_id != null ? `/player/${ev.player_id}` : null
   return (
     <div className="flex items-center gap-3 rounded-lg border p-3 bg-card">
-      {playerLink ? (
-        <Link href={playerLink} className="flex-shrink-0">
-          <PlayerIcon
-            imagePath={ev.player_image_path}
-            name={ev.player_name}
-            teamImagePath={ev.team_image_path}
-            size={40}
-          />
-        </Link>
-      ) : (
-        <PlayerIcon
-          imagePath={ev.player_image_path}
-          name={ev.player_name}
-          teamImagePath={ev.team_image_path}
-          size={40}
-        />
-      )}
+      <PlayerIcon
+        imagePath={ev.player_image_path}
+        name={ev.player_name}
+        teamImagePath={ev.team_image_path}
+        size={40}
+      />
       <div className="flex-1 min-w-0">
-        {playerLink ? (
-          <Link href={playerLink} className="font-medium text-sm truncate block hover:underline">{ev.player_name ?? 'Unknown'}</Link>
-        ) : (
-          <div className="font-medium text-sm truncate">{ev.player_name ?? 'Unknown'}</div>
-        )}
+        <div className="font-medium text-sm truncate">{ev.player_name ?? 'Unknown'}</div>
         <div className="flex items-center gap-2 mt-0.5">
           <TeamFlag src={ev.team_image_path} name={ev.team_name} />
           {ev.opponent_name && (
@@ -116,24 +99,24 @@ function EventCard({ ev, meta }: { ev: ScoreEvent; meta: CategoryMeta }) {
   )
 }
 
-export default function ScoreDetailPage() {
+export default function PlayerDetailPage() {
   const params = useParams()
   const router = useRouter()
-  const userId = Number(params.userId)
+  const playerId = Number(params.playerId)
+  const [player, setPlayer] = useState<PlayerResponse | null>(null)
   const [events, setEvents] = useState<ScoreEvent[] | null>(null)
-  const [userScore, setUserScore] = useState<UserScore | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    Promise.all([api.scoreEvents(userId), api.scores()])
-      .then(([evts, scoreboard]) => {
+    Promise.all([api.player(playerId), api.playerEvents(playerId)])
+      .then(([p, evts]) => {
+        setPlayer(p)
         setEvents(evts)
-        setUserScore(scoreboard.users?.find((u: UserScore) => u.user_id === userId) ?? null)
       })
       .catch((e: Error) => setError(e.message))
-  }, [userId])
+  }, [playerId])
 
-  const loading = !events && !error
+  const loading = !player && !error
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -148,24 +131,41 @@ export default function ScoreDetailPage() {
 
       {loading && (
         <div className="flex flex-col gap-3">
-          {[...Array(6)].map((_, i) => (
+          <div className="flex flex-col items-center gap-4 mb-6">
+            <div className="w-24 h-24 rounded-full bg-muted animate-pulse" />
+            <div className="h-6 w-40 bg-muted animate-pulse rounded" />
+            <div className="h-4 w-28 bg-muted animate-pulse rounded" />
+          </div>
+          {[...Array(4)].map((_, i) => (
             <div key={i} className="h-16 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
       )}
 
-      {!loading && !error && (
+      {!loading && !error && player && (
         <>
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-2xl font-bold">{userScore?.username ?? `User ${userId}`}</h1>
-            {userScore != null && (
-              <div className="flex items-center gap-3">
-                <span className="text-2xl font-bold">Total</span>
-                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black font-bold text-xl">
-                  {userScore.total}
+          {/* Player card */}
+          <div className="flex flex-col items-center gap-3 mb-8">
+            <PlayerIcon
+              imagePath={player.image_path}
+              name={player.display_name}
+              teamImagePath={player.team_image_path}
+              size={96}
+            />
+            <h1 className="text-2xl font-bold text-center">{player.display_name ?? 'Unknown'}</h1>
+            <div className="flex flex-wrap justify-center gap-2 text-sm text-muted-foreground">
+              {player.team_name && (
+                <div className="flex items-center gap-1.5">
+                  {player.team_image_path && (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img src={player.team_image_path} alt={player.team_name} className="w-5 h-4 object-cover rounded-sm" />
+                  )}
+                  <span>{player.team_name}</span>
                 </div>
-              </div>
-            )}
+              )}
+              {player.position_name && <span>· {player.position_name}</span>}
+              {player.jersey_number != null && <span>· #{player.jersey_number}</span>}
+            </div>
           </div>
 
           {events && events.length === 0 && (

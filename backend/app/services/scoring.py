@@ -475,6 +475,90 @@ async def compute_user_score_events(session: AsyncSession, user_id: int) -> list
     return sorted(score_events, key=lambda e: (e.minute is None, e.minute or 0))
 
 
+async def compute_player_score_events(session: AsyncSession, player_id: int) -> list[ScoreEvent]:
+    """Returns all scoring events for a single player, regardless of draft context."""
+    weights = await _load_weights(session)
+
+    player_result = await session.execute(
+        select(Player)
+        .where(Player.id == player_id)
+        .options(selectinload(Player.team), selectinload(Player.position))
+    )
+    player = player_result.scalar_one_or_none()
+    if not player:
+        return []
+
+    is_gk = player.position and player.position.category == "GK"
+
+    events_result = await session.execute(
+        select(Event)
+        .where((Event.player_id == player_id) | (Event.related_player_id == player_id))
+        .options(selectinload(Event.event_type))
+    )
+    events = list(events_result.scalars().all())
+
+    fixture_ids = {e.fixture_id for e in events if e.fixture_id}
+    fixture_map: dict[int, Fixture] = {}
+    if fixture_ids:
+        fx_result = await session.execute(
+            select(Fixture)
+            .where(Fixture.id.in_(fixture_ids))
+            .options(selectinload(Fixture.participants).selectinload(FixtureParticipant.team))
+        )
+        fixture_map = {f.id: f for f in fx_result.scalars().all()}
+
+    score_events: list[ScoreEvent] = []
+    player_map = {player.id: player}
+
+    for event in events:
+        if not event.event_type:
+            continue
+        dev = (event.event_type.developer_name or "").upper()
+
+        pid: int | None = None
+        event_type: str | None = None
+        pts: float = 0.0
+
+        if dev in _GOAL_TYPES and event.player_id == player_id:
+            pid, event_type, pts = player_id, "goal", weights["goal"]
+        elif dev in _ASSIST_TYPES and event.player_id == player_id:
+            pid, event_type, pts = player_id, "assist", weights["assist"]
+        elif dev in _YELLOW_TYPES and event.player_id == player_id:
+            pid, event_type, pts = player_id, "yellow_card", weights["yellow_card"]
+        elif dev in _RED_TYPES and event.player_id == player_id:
+            pid, event_type, pts = player_id, "red_card", weights["red_card"]
+        elif dev in _GOAL_TYPES and event.related_player_id == player_id:
+            pid, event_type, pts = player_id, "assist", weights["assist"]
+
+        if pid is None or event_type is None:
+            continue
+
+        fixture = fixture_map.get(event.fixture_id) if event.fixture_id else None
+        opponent = _get_opponent_team(fixture, player.team_id)
+
+        score_events.append(
+            ScoreEvent(
+                player_id=pid,
+                player_name=player.display_name,
+                player_image_path=player.image_path,
+                team_name=player.team.name if player.team else None,
+                team_image_path=player.team.image_path if player.team else None,
+                opponent_name=opponent.name if opponent else None,
+                opponent_image_path=opponent.image_path if opponent else None,
+                event_type=event_type,
+                minute=event.minute,
+                points=pts,
+                fixture_name=fixture.name if fixture else None,
+            )
+        )
+
+    if is_gk:
+        cs_events = await _clean_sheet_events(session, {player_id}, player_map, weights)
+        score_events.extend(cs_events)
+
+    return sorted(score_events, key=lambda e: (e.minute is None, e.minute or 0))
+
+
 def _get_opponent_team(fixture: "Fixture | None", team_id: int | None):
     if not fixture or not team_id:
         return None

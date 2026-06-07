@@ -55,6 +55,8 @@ async function postJson(path: string, body: unknown, adminKey: string) {
 export const api = {
   scores: () => get('/api/scores'),
   scoreEvents: (userId: number) => get(`/api/scores/${userId}/events`),
+  player: (playerId: number) => get(`/api/players/${playerId}`),
+  playerEvents: (playerId: number) => get(`/api/players/${playerId}/events`),
   drafts: () => get('/api/drafts'),
   draftPoints: (userId: number) => get(`/api/drafts/${userId}/points`),
   players: (params?: { position_category?: string; team_id?: number }) => {
