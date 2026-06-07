@@ -11,6 +11,29 @@ interface ModalState {
   userId: number
   username: string
   position: Position
+  slotIndex: number
+}
+
+type SlotState = Map<string, (number | null)[]> // key: `${userId}-${position}`
+
+function slotKey(userId: number, position: string) {
+  return `${userId}-${position}`
+}
+
+function buildSlotState(drafts: UserDraft[]): SlotState {
+  const map: SlotState = new Map()
+  for (const draft of drafts) {
+    for (const pos of ['GK', 'DEF', 'MID', 'FWD']) {
+      const count = REQUIRED[pos]
+      const posPlayers = draft.players
+        .filter((p) => p.position_category === pos)
+        .sort((a, b) => a.id - b.id)
+      const slots: (number | null)[] = Array(count).fill(null)
+      posPlayers.forEach((p, i) => { slots[i] = p.id })
+      map.set(slotKey(draft.user_id, pos), slots)
+    }
+  }
+  return map
 }
 
 // ─── Small pitch components ───────────────────────────────────────────────────
@@ -63,23 +86,20 @@ function FilledSlot({
 }
 
 function PositionRow({
-  players,
+  slots,
   position,
-  count,
   onEmptyClick,
   onFilledClick,
 }: {
-  players: { id: number; display_name: string | null; image_path: string | null }[]
+  slots: ({ id: number; display_name: string | null; image_path: string | null } | null)[]
   position: string
-  count: number
-  onEmptyClick: () => void
+  onEmptyClick: (slotIndex: number) => void
   onFilledClick: (playerId: number) => void
 }) {
   return (
     <div className="flex justify-around items-end py-1">
-      {Array.from({ length: count }).map((_, i) => {
-        const player = players[i]
-        return player ? (
+      {slots.map((player, i) =>
+        player ? (
           <FilledSlot
             key={player.id}
             name={player.display_name}
@@ -87,32 +107,33 @@ function PositionRow({
             onRemove={() => onFilledClick(player.id)}
           />
         ) : (
-          <EmptySlot key={`empty-${i}`} label={position} onClick={onEmptyClick} />
+          <EmptySlot key={`empty-${i}`} label={position} onClick={() => onEmptyClick(i)} />
         )
-      })}
+      )}
     </div>
   )
 }
 
 function UserPitch({
   draft,
+  slotState,
   onSlotClick,
   onRemovePlayer,
   onCoachClick,
   onRemoveCoach,
 }: {
   draft: UserDraft
-  onSlotClick: (position: Position) => void
+  slotState: SlotState
+  onSlotClick: (position: Position, slotIndex: number) => void
   onRemovePlayer: (playerId: number) => void
   onCoachClick: () => void
   onRemoveCoach: () => void
 }) {
-  const byPos: Record<string, { id: number; display_name: string | null; image_path: string | null }[]> = {
-    FWD: [], MID: [], DEF: [], GK: [],
-  }
-  for (const p of draft.players) {
-    const cat = p.position_category ?? 'MID'
-    if (cat in byPos) byPos[cat].push(p)
+  const playerById = new Map(draft.players.map((p) => [p.id, p]))
+
+  function getSlotsForPos(pos: string) {
+    const ids = slotState.get(slotKey(draft.user_id, pos)) ?? Array(REQUIRED[pos]).fill(null)
+    return ids.map((id) => (id != null ? (playerById.get(id) ?? null) : null))
   }
 
   return (
@@ -142,34 +163,10 @@ function UserPitch({
           <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
         </svg>
         <div className="absolute inset-0 z-10 flex flex-col justify-between py-2">
-          <PositionRow
-            players={byPos.FWD}
-            position="FWD"
-            count={5}
-            onEmptyClick={() => onSlotClick('FWD')}
-            onFilledClick={onRemovePlayer}
-          />
-          <PositionRow
-            players={byPos.MID}
-            position="MID"
-            count={5}
-            onEmptyClick={() => onSlotClick('MID')}
-            onFilledClick={onRemovePlayer}
-          />
-          <PositionRow
-            players={byPos.DEF}
-            position="DEF"
-            count={5}
-            onEmptyClick={() => onSlotClick('DEF')}
-            onFilledClick={onRemovePlayer}
-          />
-          <PositionRow
-            players={byPos.GK}
-            position="GK"
-            count={1}
-            onEmptyClick={() => onSlotClick('GK')}
-            onFilledClick={onRemovePlayer}
-          />
+          <PositionRow slots={getSlotsForPos('FWD')} position="FWD" onEmptyClick={(i) => onSlotClick('FWD', i)} onFilledClick={onRemovePlayer} />
+          <PositionRow slots={getSlotsForPos('MID')} position="MID" onEmptyClick={(i) => onSlotClick('MID', i)} onFilledClick={onRemovePlayer} />
+          <PositionRow slots={getSlotsForPos('DEF')} position="DEF" onEmptyClick={(i) => onSlotClick('DEF', i)} onFilledClick={onRemovePlayer} />
+          <PositionRow slots={getSlotsForPos('GK')}  position="GK"  onEmptyClick={(i) => onSlotClick('GK',  i)} onFilledClick={onRemovePlayer} />
         </div>
       </div>
 
@@ -443,6 +440,7 @@ export default function InteractiveDraftPage() {
   const [drafts, setDrafts] = useState<UserDraft[] | null>(null)
   const [players, setPlayers] = useState<PlayerResponse[]>([])
   const [coaches, setCoaches] = useState<CoachResponse[]>([])
+  const [slotState, setSlotState] = useState<SlotState>(new Map())
   const [modal, setModal] = useState<ModalState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -456,6 +454,7 @@ export default function InteractiveDraftPage() {
         setDrafts(ds)
         setPlayers(ps)
         setCoaches(cs)
+        setSlotState(buildSlotState(ds))
       })
       .catch((e) => setError(e.message))
   }, [])
@@ -475,6 +474,13 @@ export default function InteractiveDraftPage() {
     try {
       if (playerId != null) {
         await api.addPick(modal.userId, { player_id: playerId }, apiKey)
+        // Place the player in the specific slot that was clicked
+        setSlotState((prev) => {
+          const key = slotKey(modal.userId, modal.position)
+          const slots = [...(prev.get(key) ?? Array(REQUIRED[modal.position]).fill(null))]
+          slots[modal.slotIndex] = playerId
+          return new Map(prev).set(key, slots)
+        })
       } else if (coachId != null) {
         await api.addPick(modal.userId, { coach_id: coachId }, apiKey)
       }
@@ -489,6 +495,16 @@ export default function InteractiveDraftPage() {
     setActionError(null)
     try {
       await api.removePick(userId, { player_id: playerId }, apiKey)
+      // Clear just this player's slot, leaving all other slots in place
+      const draft = drafts?.find((d) => d.user_id === userId)
+      const pos = draft?.players.find((p) => p.id === playerId)?.position_category
+      if (pos) {
+        setSlotState((prev) => {
+          const key = slotKey(userId, pos)
+          const slots = (prev.get(key) ?? []).map((id) => (id === playerId ? null : id))
+          return new Map(prev).set(key, slots)
+        })
+      }
       await refreshDrafts()
     } catch (e) {
       setActionError(e instanceof Error ? e.message : 'Remove failed')
@@ -546,12 +562,13 @@ export default function InteractiveDraftPage() {
           <div key={draft.user_id} className="w-90 flex-shrink-0">
           <UserPitch
             draft={draft}
-            onSlotClick={(position) =>
-              setModal({ userId: draft.user_id, username: draft.username, position })
+            slotState={slotState}
+            onSlotClick={(position, slotIndex) =>
+              setModal({ userId: draft.user_id, username: draft.username, position, slotIndex })
             }
             onRemovePlayer={(playerId) => handleRemovePlayer(draft.user_id, playerId)}
             onCoachClick={() =>
-              setModal({ userId: draft.user_id, username: draft.username, position: 'Coach' })
+              setModal({ userId: draft.user_id, username: draft.username, position: 'Coach', slotIndex: 0 })
             }
             onRemoveCoach={() => draft.coach && handleRemoveCoach(draft.user_id, draft.coach.id)}
           />
