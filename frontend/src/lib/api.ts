@@ -18,6 +18,18 @@ async function put(path: string, body: unknown, adminKey: string) {
   return res.json()
 }
 
+async function del(path: string, adminKey: string) {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: 'DELETE',
+    headers: { 'X-Admin-Key': adminKey },
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => null)
+    throw new Error(data?.detail ?? `${res.status} ${res.statusText}`)
+  }
+  return res.json()
+}
+
 async function post(path: string, adminKey: string) {
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
@@ -67,6 +79,14 @@ export const api = {
   adminDraft: (userId: number, key: string) => get(`/admin/drafts/${userId}`, key),
   assignDraft: (userId: number, body: { player_ids: number[]; coach_id: number }, key: string) =>
     put(`/admin/drafts/${userId}`, body, key),
+  addPick: (userId: number, body: { player_id?: number; coach_id?: number }, key: string) =>
+    postJson(`/admin/drafts/${userId}/pick`, body, key),
+  removePick: (userId: number, params: { player_id?: number; coach_id?: number }, key: string) => {
+    const qs = new URLSearchParams()
+    if (params.player_id != null) qs.set('player_id', String(params.player_id))
+    if (params.coach_id != null) qs.set('coach_id', String(params.coach_id))
+    return del(`/admin/drafts/${userId}/pick?${qs.toString()}`, key)
+  },
   scoringRules: (key: string) => get('/admin/scoring-rules', key),
   syncTarget: (target: string, key: string) => post(`/admin/sync/${target}`, key),
 }

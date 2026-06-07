@@ -1,0 +1,573 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import { api } from '@/lib/api'
+import type { CoachResponse, PlayerResponse, UserDraft } from '@/lib/types'
+
+const REQUIRED: Record<string, number> = { GK: 1, DEF: 5, MID: 5, FWD: 5 }
+type Position = 'FWD' | 'MID' | 'DEF' | 'GK' | 'Coach'
+
+interface ModalState {
+  userId: number
+  username: string
+  position: Position
+}
+
+// ─── Small pitch components ───────────────────────────────────────────────────
+
+function EmptySlot({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex flex-col items-center gap-0.5 group"
+    >
+      <div className="w-9 h-9 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
+        <svg className="w-4 h-4 text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+          <path d="M10 10a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
+        </svg>
+      </div>
+      <span className="text-[8px] text-white/50 leading-none">{label}</span>
+    </button>
+  )
+}
+
+function FilledSlot({
+  name,
+  imagePath,
+  onRemove,
+}: {
+  name: string | null
+  imagePath: string | null
+  onRemove: () => void
+}) {
+  return (
+    <button onClick={onRemove} className="flex flex-col items-center gap-0.5 group">
+      <div className="relative w-9 h-9 rounded-full overflow-hidden border-2 border-white shadow bg-muted">
+        {imagePath ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={imagePath} alt={name ?? ''} className="w-full h-full object-cover" />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-[10px] font-bold text-muted-foreground">
+            {(name ?? '?').slice(0, 2).toUpperCase()}
+          </div>
+        )}
+        <div className="absolute inset-0 bg-red-500/70 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+          <span className="text-white text-xs font-bold">✕</span>
+        </div>
+      </div>
+      <span className="text-[8px] text-white font-medium truncate max-w-[40px] leading-none">
+        {name?.split(' ').pop() ?? ''}
+      </span>
+    </button>
+  )
+}
+
+function PositionRow({
+  players,
+  position,
+  count,
+  onEmptyClick,
+  onFilledClick,
+}: {
+  players: { id: number; display_name: string | null; image_path: string | null }[]
+  position: string
+  count: number
+  onEmptyClick: () => void
+  onFilledClick: (playerId: number) => void
+}) {
+  return (
+    <div className="flex justify-around items-end py-1">
+      {Array.from({ length: count }).map((_, i) => {
+        const player = players[i]
+        return player ? (
+          <FilledSlot
+            key={player.id}
+            name={player.display_name}
+            imagePath={player.image_path}
+            onRemove={() => onFilledClick(player.id)}
+          />
+        ) : (
+          <EmptySlot key={`empty-${i}`} label={position} onClick={onEmptyClick} />
+        )
+      })}
+    </div>
+  )
+}
+
+function UserPitch({
+  draft,
+  onSlotClick,
+  onRemovePlayer,
+  onCoachClick,
+  onRemoveCoach,
+}: {
+  draft: UserDraft
+  onSlotClick: (position: Position) => void
+  onRemovePlayer: (playerId: number) => void
+  onCoachClick: () => void
+  onRemoveCoach: () => void
+}) {
+  const byPos: Record<string, { id: number; display_name: string | null; image_path: string | null }[]> = {
+    FWD: [], MID: [], DEF: [], GK: [],
+  }
+  for (const p of draft.players) {
+    const cat = p.position_category ?? 'MID'
+    if (cat in byPos) byPos[cat].push(p)
+  }
+
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-xs font-semibold text-center truncate px-1">{draft.username}</div>
+
+      {/* Pitch */}
+      <div
+        className="relative rounded-lg overflow-hidden w-full"
+        style={{
+          aspectRatio: '2 / 3',
+          background: 'linear-gradient(180deg, #2d7a27 0%, #3a9e33 50%, #2d7a27 100%)',
+        }}
+      >
+        <svg
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          viewBox="0 0 320 480"
+          preserveAspectRatio="none"
+        >
+          <line x1="0" y1="240" x2="320" y2="240" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+          <circle cx="160" cy="240" r="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+          <circle cx="160" cy="240" r="2" fill="rgba(255,255,255,0.4)" />
+          <rect x="80" y="0" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+          <rect x="110" y="0" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+          <rect x="80" y="400" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+          <rect x="110" y="440" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+          <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        </svg>
+        <div className="absolute inset-0 z-10 flex flex-col justify-between py-2">
+          <PositionRow
+            players={byPos.FWD}
+            position="FWD"
+            count={5}
+            onEmptyClick={() => onSlotClick('FWD')}
+            onFilledClick={onRemovePlayer}
+          />
+          <PositionRow
+            players={byPos.MID}
+            position="MID"
+            count={5}
+            onEmptyClick={() => onSlotClick('MID')}
+            onFilledClick={onRemovePlayer}
+          />
+          <PositionRow
+            players={byPos.DEF}
+            position="DEF"
+            count={5}
+            onEmptyClick={() => onSlotClick('DEF')}
+            onFilledClick={onRemovePlayer}
+          />
+          <PositionRow
+            players={byPos.GK}
+            position="GK"
+            count={1}
+            onEmptyClick={() => onSlotClick('GK')}
+            onFilledClick={onRemovePlayer}
+          />
+        </div>
+      </div>
+
+      {/* Coach */}
+      <div className="flex justify-center">
+        {draft.coach ? (
+          <button
+            onClick={onRemoveCoach}
+            className="flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs hover:bg-accent group max-w-full"
+          >
+            <div className="w-5 h-5 rounded-full overflow-hidden bg-muted border flex-shrink-0">
+              {draft.coach.image_path ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={draft.coach.image_path} alt={draft.coach.display_name ?? ''} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-[8px]">
+                  {(draft.coach.display_name ?? '?').slice(0, 2).toUpperCase()}
+                </div>
+              )}
+            </div>
+            <span className="truncate">{draft.coach.display_name}</span>
+            <span className="text-destructive opacity-0 group-hover:opacity-100 text-[10px] flex-shrink-0">✕</span>
+          </button>
+        ) : (
+          <button
+            onClick={onCoachClick}
+            className="flex items-center gap-1 rounded-md border border-dashed px-2 py-1 text-xs text-muted-foreground hover:text-foreground hover:border-foreground transition-colors"
+          >
+            + Coach
+          </button>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Pick Modal ───────────────────────────────────────────────────────────────
+
+function PickModal({
+  modal,
+  players,
+  coaches,
+  allDrafts,
+  onPick,
+  onClose,
+}: {
+  modal: ModalState
+  players: PlayerResponse[]
+  coaches: CoachResponse[]
+  allDrafts: UserDraft[]
+  onPick: (playerId: number | null, coachId: number | null) => void
+  onClose: () => void
+}) {
+  const [search, setSearch] = useState('')
+  const [countryFilter, setCountryFilter] = useState<number | null>(null)
+
+  const userDraft = allDrafts.find((d) => d.user_id === modal.userId)
+
+  // All globally picked player IDs across all users
+  const globallyPickedPlayerIds = useMemo(() => {
+    const ids = new Set<number>()
+    for (const d of allDrafts) {
+      for (const p of d.players) ids.add(p.id)
+    }
+    return ids
+  }, [allDrafts])
+
+  // All globally picked coach IDs
+  const globallyPickedCoachIds = useMemo(() => {
+    const ids = new Set<number>()
+    for (const d of allDrafts) {
+      if (d.coach) ids.add(d.coach.id)
+    }
+    return ids
+  }, [allDrafts])
+
+  // Teams already in this user's draft (cross-ref with full player list to get team_id)
+  const userTeamIds = useMemo(() => {
+    if (!userDraft) return new Set<number>()
+    const pickedIds = new Set(userDraft.players.map((p) => p.id))
+    const teamIds = new Set<number>()
+    for (const p of players) {
+      if (pickedIds.has(p.id) && p.team_id != null) teamIds.add(p.team_id)
+    }
+    return teamIds
+  }, [userDraft, players])
+
+  const isCoach = modal.position === 'Coach'
+
+  const positionPlayers = useMemo(
+    () => players.filter((p) => p.position_category === modal.position),
+    [players, modal.position]
+  )
+
+  const countries = useMemo(() => {
+    const seen = new Map<number, { id: number; name: string; image_path: string | null; short_code: string | null }>()
+    for (const p of positionPlayers) {
+      if (p.team_id != null && !seen.has(p.team_id)) {
+        seen.set(p.team_id, {
+          id: p.team_id,
+          name: p.team_name ?? '',
+          image_path: p.team_image_path,
+          short_code: p.team_short_code,
+        })
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [positionPlayers])
+
+  const filteredPlayers = positionPlayers
+    .filter((p) => countryFilter == null || p.team_id === countryFilter)
+    .filter((p) => !search || (p.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => (a.team_name ?? '').localeCompare(b.team_name ?? ''))
+
+  const filteredCoaches = coaches
+    .filter((c) => !search || (c.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="bg-background rounded-xl shadow-xl w-full max-w-md flex flex-col max-h-[85vh]">
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 pt-4 pb-2 flex-shrink-0">
+          <div>
+            <div className="text-xs text-muted-foreground">Picking for</div>
+            <div className="font-semibold">{modal.username} — {modal.position}</div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center hover:bg-accent text-muted-foreground hover:text-foreground transition-colors"
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 pb-2 flex-shrink-0">
+          <input
+            type="text"
+            placeholder="Search by name…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="w-full rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            autoFocus
+          />
+        </div>
+
+        {/* Country filter (players only) */}
+        {!isCoach && (
+          <div className="px-4 pb-2 flex-shrink-0">
+            <div className="grid grid-cols-8 gap-x-2 gap-y-2">
+              {countries.map((country) => {
+                const isSelected = countryFilter === country.id
+                return (
+                  <button
+                    key={country.id}
+                    onClick={() => setCountryFilter(isSelected ? null : country.id)}
+                    title={country.name}
+                    className="flex flex-col items-center gap-0.5"
+                  >
+                    <div className={`w-8 h-8 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-1' : ''}`}>
+                      {country.image_path ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img src={country.image_path} alt={country.name} className="w-full h-full object-cover scale-150" />
+                      ) : (
+                        <div className="w-full h-full bg-muted flex items-center justify-center text-[9px] font-medium">
+                          {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
+                        </div>
+                      )}
+                    </div>
+                    <span className="text-[9px] leading-none text-muted-foreground">
+                      {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Player / Coach list */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4">
+          <div className="flex flex-col gap-1">
+            {isCoach ? (
+              <>
+                {filteredCoaches.map((c) => {
+                  const isTaken = globallyPickedCoachIds.has(c.id)
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => !isTaken && onPick(null, c.id)}
+                      disabled={isTaken}
+                      className={`flex items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${
+                        isTaken ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accent'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-muted border flex-shrink-0">
+                        {c.image_path ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={c.image_path} alt={c.display_name ?? ''} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+                            {(c.display_name ?? '?').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{c.display_name}</div>
+                        <div className="text-xs text-muted-foreground">{c.team_name}</div>
+                      </div>
+                      {isTaken && <span className="text-xs text-muted-foreground flex-shrink-0">taken</span>}
+                    </button>
+                  )
+                })}
+                {filteredCoaches.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No coaches found.</p>
+                )}
+              </>
+            ) : (
+              <>
+                {filteredPlayers.map((p) => {
+                  const isGloballyTaken = globallyPickedPlayerIds.has(p.id)
+                  const isTeamConflict = !isGloballyTaken && p.team_id != null && userTeamIds.has(p.team_id)
+                  const disabled = isGloballyTaken || isTeamConflict
+                  return (
+                    <button
+                      key={p.id}
+                      onClick={() => !disabled && onPick(p.id, null)}
+                      disabled={disabled}
+                      className={`flex items-center gap-3 rounded-lg border p-2.5 text-left transition-colors ${
+                        disabled ? 'opacity-40 cursor-not-allowed' : 'hover:bg-accent'
+                      }`}
+                    >
+                      <div className="w-8 h-8 rounded-full overflow-hidden bg-muted border flex-shrink-0">
+                        {p.image_path ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={p.image_path} alt={p.display_name ?? ''} className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-[10px] text-muted-foreground">
+                            {(p.display_name ?? '?').slice(0, 2).toUpperCase()}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium truncate">{p.display_name}</div>
+                        <div className="text-xs text-muted-foreground">{p.team_name}</div>
+                      </div>
+                      {isGloballyTaken && <span className="text-xs text-muted-foreground flex-shrink-0">taken</span>}
+                      {isTeamConflict && <span className="text-xs text-muted-foreground flex-shrink-0">team taken</span>}
+                    </button>
+                  )
+                })}
+                {filteredPlayers.length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-8">No players found.</p>
+                )}
+              </>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
+
+export default function InteractiveDraftPage() {
+  const [apiKey, setApiKey] = useState('')
+  const [drafts, setDrafts] = useState<UserDraft[] | null>(null)
+  const [players, setPlayers] = useState<PlayerResponse[]>([])
+  const [coaches, setCoaches] = useState<CoachResponse[]>([])
+  const [modal, setModal] = useState<ModalState | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
+
+  useEffect(() => {
+    const key = localStorage.getItem('admin_api_key') ?? ''
+    setApiKey(key)
+
+    Promise.all([api.drafts(), api.players(), api.coaches()])
+      .then(([ds, ps, cs]) => {
+        setDrafts(ds)
+        setPlayers(ps)
+        setCoaches(cs)
+      })
+      .catch((e) => setError(e.message))
+  }, [])
+
+  async function refreshDrafts() {
+    try {
+      const ds = await api.drafts()
+      setDrafts(ds)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Refresh failed')
+    }
+  }
+
+  async function handlePick(playerId: number | null, coachId: number | null) {
+    if (!modal) return
+    setActionError(null)
+    try {
+      if (playerId != null) {
+        await api.addPick(modal.userId, { player_id: playerId }, apiKey)
+      } else if (coachId != null) {
+        await api.addPick(modal.userId, { coach_id: coachId }, apiKey)
+      }
+      setModal(null)
+      await refreshDrafts()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Pick failed')
+    }
+  }
+
+  async function handleRemovePlayer(userId: number, playerId: number) {
+    setActionError(null)
+    try {
+      await api.removePick(userId, { player_id: playerId }, apiKey)
+      await refreshDrafts()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Remove failed')
+    }
+  }
+
+  async function handleRemoveCoach(userId: number, coachId: number) {
+    setActionError(null)
+    try {
+      await api.removePick(userId, { coach_id: coachId }, apiKey)
+      await refreshDrafts()
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Remove failed')
+    }
+  }
+
+  if (error) {
+    return <div className="max-w-2xl mx-auto px-4 py-8 text-destructive">{error}</div>
+  }
+
+  if (!drafts) {
+    return (
+      <div className="px-4 py-8">
+        <div className="h-8 w-64 bg-muted animate-pulse rounded mb-6" />
+        <div className="grid grid-cols-3 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  // Exclude admin users from the draft grid — only show non-admin users
+  const draftUsers = drafts.filter((d) => !d.is_active || true) // show all users
+
+  return (
+    <div className="px-4 py-6 flex flex-col gap-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground">← Admin</a>
+        <h1 className="text-xl font-semibold">Interactive Draft</h1>
+        <div className="ml-auto text-xs text-muted-foreground">
+          Click an empty slot to pick · Click a filled slot to undo
+        </div>
+      </div>
+
+      {actionError && (
+        <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
+          {actionError}
+        </div>
+      )}
+
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+        {draftUsers.map((draft) => (
+          <UserPitch
+            key={draft.user_id}
+            draft={draft}
+            onSlotClick={(position) =>
+              setModal({ userId: draft.user_id, username: draft.username, position })
+            }
+            onRemovePlayer={(playerId) => handleRemovePlayer(draft.user_id, playerId)}
+            onCoachClick={() =>
+              setModal({ userId: draft.user_id, username: draft.username, position: 'Coach' })
+            }
+            onRemoveCoach={() => draft.coach && handleRemoveCoach(draft.user_id, draft.coach.id)}
+          />
+        ))}
+      </div>
+
+      {modal && (
+        <PickModal
+          modal={modal}
+          players={players}
+          coaches={coaches}
+          allDrafts={drafts}
+          onPick={handlePick}
+          onClose={() => setModal(null)}
+        />
+      )}
+    </div>
+  )
+}

@@ -214,6 +214,111 @@ async def assign_draft(
     return await get_user_draft(user_id, session)
 
 
+class AddPickRequest(BaseModel):
+    player_id: int | None = None
+    coach_id: int | None = None
+
+
+@router.post("/drafts/{user_id}/pick", response_model=UserDraftAdminResponse)
+async def add_pick(
+    user_id: int,
+    body: AddPickRequest,
+    session: AsyncSession = Depends(get_db),
+):
+    await _get_user_or_404(session, user_id)
+
+    if body.player_id is not None:
+        player_result = await session.execute(
+            select(Player)
+            .where(Player.id == body.player_id)
+            .options(selectinload(Player.position), selectinload(Player.team))
+        )
+        player = player_result.scalar_one_or_none()
+        if player is None:
+            raise HTTPException(status_code=404, detail=f"Player {body.player_id} not found")
+
+        cat = player.position.category if player.position else None
+        if cat is None:
+            raise HTTPException(status_code=400, detail="Player has no position category")
+
+        existing_result = await session.execute(
+            select(Draft)
+            .where(Draft.user_id == user_id, Draft.player_id.isnot(None))
+            .options(
+                selectinload(Draft.player).selectinload(Player.position),
+                selectinload(Draft.player).selectinload(Player.team),
+            )
+        )
+        current = existing_result.scalars().all()
+
+        if any(e.player_id == body.player_id for e in current):
+            raise HTTPException(status_code=400, detail="Player already in draft")
+
+        required = {"GK": 1, "DEF": 5, "MID": 5, "FWD": 5}
+        count_in_pos = sum(
+            1 for e in current
+            if e.player and e.player.position and e.player.position.category == cat
+        )
+        if count_in_pos >= required.get(cat, 0):
+            raise HTTPException(status_code=400, detail=f"Position {cat} is full")
+
+        if player.team_id and any(
+            e.player and e.player.team_id == player.team_id for e in current
+        ):
+            raise HTTPException(status_code=400, detail="Player's team already in draft")
+
+        session.add(Draft(user_id=user_id, player_id=body.player_id))
+
+    elif body.coach_id is not None:
+        coach_result = await session.execute(select(Coach).where(Coach.id == body.coach_id))
+        if coach_result.scalar_one_or_none() is None:
+            raise HTTPException(status_code=404, detail=f"Coach {body.coach_id} not found")
+
+        existing_coach = await session.execute(
+            select(Draft).where(Draft.user_id == user_id, Draft.coach_id.isnot(None))
+        )
+        for e in existing_coach.scalars().all():
+            await session.delete(e)
+
+        session.add(Draft(user_id=user_id, coach_id=body.coach_id))
+
+    else:
+        raise HTTPException(status_code=400, detail="Provide player_id or coach_id")
+
+    await session.commit()
+    return await get_user_draft(user_id, session)
+
+
+@router.delete("/drafts/{user_id}/pick", response_model=UserDraftAdminResponse)
+async def remove_pick(
+    user_id: int,
+    player_id: int | None = None,
+    coach_id: int | None = None,
+    session: AsyncSession = Depends(get_db),
+):
+    await _get_user_or_404(session, user_id)
+
+    if player_id is not None:
+        result = await session.execute(
+            select(Draft).where(Draft.user_id == user_id, Draft.player_id == player_id)
+        )
+        entry = result.scalar_one_or_none()
+        if entry:
+            await session.delete(entry)
+    elif coach_id is not None:
+        result = await session.execute(
+            select(Draft).where(Draft.user_id == user_id, Draft.coach_id == coach_id)
+        )
+        entry = result.scalar_one_or_none()
+        if entry:
+            await session.delete(entry)
+    else:
+        raise HTTPException(status_code=400, detail="Provide player_id or coach_id")
+
+    await session.commit()
+    return await get_user_draft(user_id, session)
+
+
 async def _validate_draft(
     session: AsyncSession,
     player_ids: list[int],

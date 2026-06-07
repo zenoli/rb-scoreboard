@@ -141,6 +141,22 @@ export default function AdminPage() {
             </div>
           </section>
 
+          {/* Interactive Draft */}
+          <section className="rounded-lg border p-4 bg-card">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-medium text-sm">Interactive Draft</h2>
+                <p className="text-xs text-muted-foreground mt-0.5">Live draft session — everyone picks on one shared screen</p>
+              </div>
+              <Link
+                href="/admin/interactive-draft"
+                className="rounded-md bg-primary text-primary-foreground px-3 py-1.5 text-xs font-medium hover:bg-primary/90 transition-colors"
+              >
+                Open →
+              </Link>
+            </div>
+          </section>
+
           {/* Users */}
           <section className="rounded-lg border p-4 bg-card flex flex-col gap-3">
             <div className="flex items-center justify-between">
