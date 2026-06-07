@@ -19,6 +19,8 @@ class PlayerResponse(BaseModel):
     jersey_number: int | None
     team_id: int | None
     team_name: str | None
+    team_image_path: str | None
+    team_short_code: str | None
     position_id: int | None
     position_name: str | None
     position_category: str | None
@@ -63,6 +65,8 @@ async def get_players(
             jersey_number=p.jersey_number,
             team_id=p.team_id,
             team_name=p.team.name if p.team else None,
+            team_image_path=p.team.image_path if p.team else None,
+            team_short_code=p.team.short_code if p.team else None,
             position_id=p.position_id,
             position_name=p.position.name if p.position else None,
             position_category=p.position.category if p.position else None,

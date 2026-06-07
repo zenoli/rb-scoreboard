@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Badge } from '@/components/ui/badge'
@@ -21,6 +21,7 @@ export default function AdminDraftPage() {
   const [selectedPlayers, setSelectedPlayers] = useState<Set<number>>(new Set())
   const [selectedCoach, setSelectedCoach] = useState<number | null>(null)
   const [posFilter, setPosFilter] = useState<string>('GK')
+  const [countryFilter, setCountryFilter] = useState<number | null>(null)
   const [search, setSearch] = useState('')
   const [username, setUsername] = useState<string | null>(null)
   const [hasDraft, setHasDraft] = useState(false)
@@ -76,8 +77,19 @@ export default function AdminDraftPage() {
     }
   }
 
+  const countries = useMemo(() => {
+    const seen = new Map<number, { id: number; name: string; image_path: string | null; short_code: string | null }>()
+    for (const p of players) {
+      if (p.team_id != null && !seen.has(p.team_id)) {
+        seen.set(p.team_id, { id: p.team_id, name: p.team_name ?? '', image_path: p.team_image_path, short_code: p.team_short_code })
+      }
+    }
+    return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
+  }, [players])
+
   const filteredPlayers = players
     .filter((p) => p.position_category === posFilter)
+    .filter((p) => countryFilter == null || p.team_id === countryFilter)
     .filter((p) => !search || (p.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => (a.team_name ?? '').localeCompare(b.team_name ?? ''))
 
@@ -157,6 +169,47 @@ export default function AdminDraftPage() {
         onChange={(e) => setSearch(e.target.value)}
         className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
       />
+
+      {/* Country filter */}
+      {posFilter !== 'Coach' && (
+        <div className="grid grid-cols-8 gap-x-2 gap-y-3">
+          {countries.map((country) => {
+            const isDrafted = draftedTeams.has(country.id)
+            const isSelected = countryFilter === country.id
+            return (
+              <button
+                key={country.id}
+                onClick={() => !isDrafted && setCountryFilter(isSelected ? null : country.id)}
+                disabled={isDrafted}
+                title={country.name}
+                className={`flex flex-col items-center gap-1 transition-all ${
+                  isDrafted ? 'cursor-not-allowed' : isSelected ? '' : 'opacity-60 hover:opacity-100'
+                }`}
+              >
+                <div className={`w-9 h-9 rounded-full overflow-hidden transition-all ${
+                  isSelected ? 'ring-2 ring-primary ring-offset-1' : ''
+                } ${isDrafted ? 'grayscale' : ''}`}>
+                  {country.image_path ? (
+                    // eslint-disable-next-line @next/next/no-img-element
+                    <img
+                      src={country.image_path}
+                      alt={country.name}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-muted flex items-center justify-center text-[9px] font-medium">
+                      {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
+                    </div>
+                  )}
+                </div>
+                <span className={`text-[10px] leading-none ${isDrafted ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
+                  {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+      )}
 
       <Tabs value={posFilter === 'Coach' ? 'Coach' : posFilter} onValueChange={setPosFilter}>
         <TabsList className="flex-wrap h-auto gap-1">

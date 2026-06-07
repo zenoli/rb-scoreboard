@@ -65,6 +65,8 @@ export interface PlayerResponse {
   jersey_number: number | null
   team_id: number | null
   team_name: string | null
+  team_image_path: string | null
+  team_short_code: string | null
   position_id: number | null
   position_name: string | null
   position_category: string | null
