@@ -31,7 +31,7 @@ export function PlayerIcon({
       className={`relative flex-shrink-0${className ? ` ${className}` : ''}`}
       style={{ width: size, height: size }}
     >
-      <div className={`w-full h-full rounded-full overflow-hidden bg-muted ${avatarClassName}`}>
+      <div className={`w-full h-full rounded-full overflow-hidden bg-muted drop-shadow-md ${avatarClassName}`}>
         {imagePath ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imagePath} alt={name ?? ''} className="w-full h-full object-cover" />
