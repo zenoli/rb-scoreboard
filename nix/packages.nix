@@ -48,7 +48,7 @@
           src = ../frontend;
 
           # Run `nix build .#frontend` once to get the correct hash from the error output.
-          npmDepsHash = "sha256-d64epMVAKoRaUPZIMoFGxBd6l3cMRjZGU3taqwWeZZk=";
+          npmDepsHash = "sha256-JTjqiLu2ySrZBbF2z5wsNTjZGWJcsoIBNqrPPiDT0XA=";
 
           env.NEXT_PUBLIC_API_URL = "https://rb.qew.ch";
 
