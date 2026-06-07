@@ -22,6 +22,7 @@ export default function AdminDraftPage() {
   const [selectedCoach, setSelectedCoach] = useState<number | null>(null)
   const [posFilter, setPosFilter] = useState<string>('GK')
   const [search, setSearch] = useState('')
+  const [username, setUsername] = useState<string | null>(null)
   const [hasDraft, setHasDraft] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -36,6 +37,7 @@ export default function AdminDraftPage() {
       .then(([ps, cs, existing]) => {
         setPlayers(ps)
         setCoaches(cs)
+        if (existing?.username) setUsername(existing.username)
         if (existing?.entries?.length) {
           const playerIds = existing.entries
             .filter((e: { player_id: number | null }) => e.player_id !== null)
@@ -114,7 +116,9 @@ export default function AdminDraftPage() {
         <button onClick={() => router.back()} className="text-sm text-muted-foreground hover:text-foreground">
           ← Back
         </button>
-        <h1 className="text-xl font-semibold">{hasDraft ? 'Edit Draft' : 'Assign Draft'}</h1>
+        <h1 className="text-xl font-semibold">
+          {hasDraft ? 'Edit draft' : 'Assign draft'}{username ? ` of ${username}` : ''}
+        </h1>
       </div>
 
       {/* Slot summary */}
