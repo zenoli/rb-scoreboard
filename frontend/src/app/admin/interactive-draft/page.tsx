@@ -26,7 +26,7 @@ function EmptySlot({ label, onClick }: { label: string; onClick: () => void }) {
           <path d="M10 10a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
         </svg>
       </div>
-      <span className="text-[8px] text-white/50 leading-none">{label}</span>
+      <span className="text-[11px] text-white/50 leading-none">{label}</span>
     </button>
   )
 }
@@ -55,7 +55,7 @@ function FilledSlot({
           <span className="text-white text-xs font-bold">✕</span>
         </div>
       </div>
-      <span className="text-[8px] text-white font-medium truncate max-w-[60px] leading-none">
+      <span className="text-[11px] text-white font-medium truncate max-w-[60px] leading-none">
         {name?.split(' ').pop() ?? ''}
       </span>
     </button>
