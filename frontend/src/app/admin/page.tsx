@@ -49,7 +49,7 @@ export default function AdminPage() {
       .then((loaded) => {
         setSeasons(loaded)
         // Check if the active season is already syncing (e.g. from startup)
-        const active = loaded.find((s) => s.is_active)
+        const active = loaded.find((s: Season) => s.is_active)
         if (active) {
           api.seasonSyncStatus(active.id, savedKey).then((res) => {
             if (res.status !== 'idle' && res.status !== 'done' && !res.status.startsWith('error')) {
