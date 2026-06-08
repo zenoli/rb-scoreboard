@@ -39,6 +39,11 @@ let
   sync-events    = mkSyncScript "events";
   sync-positions = mkSyncScript "positions";
 
+  db-ui = pkgs.writeShellScriptBin "db-ui" ''
+    echo "Starting sqlite-web at http://localhost:8080 ..."
+    exec ${pkgs.sqlite-web}/bin/sqlite_web "$BACKEND_DIR/scoreboard.db" --host 0.0.0.0 --port 8080
+  '';
+
   sync-all = pkgs.writeShellScriptBin "sync-all" ''
     echo "Syncing all targets..."
     for target in event_types teams fixtures; do
@@ -63,6 +68,8 @@ pkgs.mkShell {
     sync-events
     sync-positions
     sync-all
+    db-ui
+    pkgs.sqlite-web
   ];
 
   shellHook = ''
