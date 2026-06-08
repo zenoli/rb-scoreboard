@@ -40,7 +40,7 @@
         };
       };
 
-      mkFrontend = apiUrl: pkgs.buildNpmPackage {
+      frontend = pkgs.buildNpmPackage {
         pname = "rb-scoreboard-frontend";
         version = "0.1.0";
         src = ../frontend;
@@ -48,7 +48,8 @@
         # Run `nix build .#frontend` once to get the correct hash from the error output.
         npmDepsHash = "sha256-JTjqiLu2ySrZBbF2z5wsNTjZGWJcsoIBNqrPPiDT0XA=";
 
-        env.NEXT_PUBLIC_API_URL = apiUrl;
+        # Empty string → relative URLs; Next.js rewrites proxy API calls to backend
+        env.NEXT_PUBLIC_API_URL = "";
 
         installPhase = ''
           runHook preInstall
@@ -103,15 +104,11 @@
     in
     {
       packages = {
-        inherit backend;
+        inherit backend frontend;
 
-        frontend = mkFrontend "https://rb.qew.ch";
-        frontend-local = mkFrontend "http://localhost:8000";
-
-        default = mkApp { frontend = self'.packages.frontend; };
+        default = mkApp { inherit frontend; };
         local = mkApp {
-          frontend = self'.packages.frontend-local;
-          backendPort = "8000";
+          inherit frontend;
           frontendPort = "9400";
         };
       };
