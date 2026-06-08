@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import type { AdminUser, Season } from '@/lib/types'
 
-const SYNC_TARGETS = ['teams', 'fixtures', 'events', 'event_types', 'lineups']
+const SYNC_TARGETS = ['teams', 'fixtures', 'events', 'all_events', 'event_types', 'lineups']
 
 export default function AdminPage() {
   const [apiKey, setApiKey] = useState('')
@@ -17,9 +17,7 @@ export default function AdminPage() {
 
   const [seasons, setSeasons] = useState<Season[]>([])
   const [seasonLoading, setSeasonLoading] = useState(false)
-  const [createSeasonOpen, setCreateSeasonOpen] = useState(false)
-  const [newSeason, setNewSeason] = useState({ name: '', sm_season_id: '' })
-  const [createSeasonError, setCreateSeasonError] = useState<string | null>(null)
+  const [activatingSeason, setActivatingSeason] = useState<number | null>(null)
 
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ username: '', password: '' })
@@ -65,31 +63,42 @@ export default function AdminPage() {
 
   async function handleActivateSeason(seasonId: number) {
     setSeasonLoading(true)
+    setActivatingSeason(seasonId)
     try {
       const updated = await api.activateSeason(seasonId, savedKey)
       setSeasons((prev) => prev.map((s) => ({ ...s, is_active: s.id === updated.id })))
+      // Poll sync status until done or error
+      pollSyncStatus(seasonId)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to switch season')
+      setActivatingSeason(null)
     } finally {
       setSeasonLoading(false)
     }
   }
 
-  async function handleCreateSeason() {
-    setCreateSeasonError(null)
-    const sm_season_id = parseInt(newSeason.sm_season_id)
-    if (!newSeason.name || isNaN(sm_season_id)) {
-      setCreateSeasonError('Name and valid Sportmonks season ID are required')
-      return
-    }
+  function pollSyncStatus(seasonId: number) {
+    const interval = setInterval(async () => {
+      try {
+        const res = await api.seasonSyncStatus(seasonId, savedKey)
+        if (res.status === 'done' || res.status.startsWith('error')) {
+          clearInterval(interval)
+          setActivatingSeason(null)
+        }
+      } catch {
+        clearInterval(interval)
+        setActivatingSeason(null)
+      }
+    }, 2000)
+  }
+
+  async function handleRefreshSeasons() {
     setSeasonLoading(true)
     try {
-      const created = await api.createSeason({ name: newSeason.name, sm_season_id }, savedKey)
-      setSeasons((prev) => [...prev, created])
-      setCreateSeasonOpen(false)
-      setNewSeason({ name: '', sm_season_id: '' })
+      const updated = await api.fetchSeasonsFromSportmonks(savedKey)
+      setSeasons(updated)
     } catch (e) {
-      setCreateSeasonError(e instanceof Error ? e.message : 'Failed to create season')
+      setError(e instanceof Error ? e.message : 'Failed to fetch seasons')
     } finally {
       setSeasonLoading(false)
     }
@@ -167,10 +176,11 @@ export default function AdminPage() {
           <h2 className="font-medium text-sm">Season</h2>
           {savedKey && (
             <button
-              onClick={() => { setCreateSeasonOpen(true); setCreateSeasonError(null) }}
-              className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors"
+              onClick={handleRefreshSeasons}
+              disabled={seasonLoading}
+              className="rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent transition-colors disabled:opacity-50"
             >
-              + New season
+              {seasonLoading ? 'Loading…' : 'Refresh from Sportsmonks'}
             </button>
           )}
         </div>
@@ -184,11 +194,14 @@ export default function AdminPage() {
                   <span className="text-sm font-medium">{s.name}</span>
                   <span className="text-xs text-muted-foreground">#{s.sm_season_id}</span>
                   {s.is_active && <Badge className="text-xs">Active</Badge>}
+                  {s.is_active && activatingSeason === s.id && (
+                    <span className="text-xs text-muted-foreground animate-pulse">syncing…</span>
+                  )}
                 </div>
                 {savedKey && !s.is_active && (
                   <button
                     onClick={() => handleActivateSeason(s.id)}
-                    disabled={seasonLoading}
+                    disabled={seasonLoading || activatingSeason !== null}
                     className="text-xs text-muted-foreground hover:text-foreground underline transition-colors disabled:opacity-50"
                   >
                     Activate
@@ -294,48 +307,6 @@ export default function AdminPage() {
             )}
           </section>
         </>
-      )}
-
-      {/* Create season modal */}
-      {createSeasonOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-          <div className="bg-card rounded-lg border p-6 w-full max-w-sm flex flex-col gap-4 mx-4">
-            <h2 className="font-semibold text-base">New season</h2>
-            <div className="flex flex-col gap-3">
-              <input
-                type="text"
-                placeholder="Name (e.g. WC2026)"
-                value={newSeason.name}
-                onChange={(e) => setNewSeason((s) => ({ ...s, name: e.target.value }))}
-                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-              <input
-                type="number"
-                placeholder="Sportmonks season ID (e.g. 26618)"
-                value={newSeason.sm_season_id}
-                onChange={(e) => setNewSeason((s) => ({ ...s, sm_season_id: e.target.value }))}
-                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-ring"
-              />
-            </div>
-            {createSeasonError && <p className="text-xs text-destructive">{createSeasonError}</p>}
-            <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setCreateSeasonOpen(false)}
-                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
-                disabled={seasonLoading}
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleCreateSeason}
-                disabled={seasonLoading || !newSeason.name || !newSeason.sm_season_id}
-                className="rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
-              >
-                {seasonLoading ? 'Creating…' : 'Create'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
 
       {/* Delete confirmation */}

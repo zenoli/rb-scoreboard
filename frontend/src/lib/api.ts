@@ -93,8 +93,9 @@ export const api = {
   scoringRules: (key: string) => get('/admin/scoring-rules', key),
   syncTarget: (target: string, key: string) => post(`/admin/sync/${target}`, key),
   seasons: () => get('/api/seasons'),
-  createSeason: (body: { name: string; sm_season_id: number }, key: string) =>
-    postJson('/admin/seasons', body, key),
+  fetchSeasonsFromSportmonks: (key: string) => post('/admin/seasons/fetch', key),
   activateSeason: (seasonId: number, key: string) =>
     put(`/admin/seasons/${seasonId}/activate`, {}, key),
+  seasonSyncStatus: (seasonId: number, key: string) =>
+    get(`/admin/seasons/${seasonId}/sync-status`, key),
 }
