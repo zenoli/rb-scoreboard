@@ -52,14 +52,16 @@
 
         installPhase = ''
           runHook preInstall
-          cp -r out $out
+          cp -rT .next/standalone $out
+          cp -r .next/static $out/.next/static
+          if [ -d public ]; then cp -r public $out/public; fi
           runHook postInstall
         '';
 
-        meta.description = "RB Scoreboard frontend";
+        meta.description = "RB Scoreboard frontend (standalone)";
       };
 
-      mkApp = frontend: pkgs.stdenv.mkDerivation {
+      mkApp = { frontend, backendPort ? "8000", frontendPort ? "3000" }: pkgs.stdenv.mkDerivation {
         pname = "rb-scoreboard";
         version = "0.1.0";
         dontUnpack = true;
@@ -67,14 +69,21 @@
         installPhase = ''
           mkdir -p $out/bin $out/share/rb-scoreboard
 
-          cp -r ${frontend} $out/share/rb-scoreboard/static
+          cp -r ${frontend} $out/share/rb-scoreboard/frontend
           cp -r ${../backend/alembic} $out/share/rb-scoreboard/alembic
           cp ${../backend/alembic.ini} $out/share/rb-scoreboard/alembic.ini
 
           cat > $out/bin/rb-scoreboard <<WRAPPER
           #!/usr/bin/env bash
-          export STATIC_DIR="$out/share/rb-scoreboard/static"
-          exec ${backend}/bin/uvicorn app.main:app "\$@"
+          BACKEND_PORT="''${BACKEND_PORT:-${backendPort}}"
+          FRONTEND_PORT="''${FRONTEND_PORT:-${frontendPort}}"
+
+          cleanup() { kill 0 2>/dev/null; }
+          trap cleanup EXIT
+
+          PORT="\$FRONTEND_PORT" HOSTNAME=0.0.0.0 ${pkgs.nodejs}/bin/node $out/share/rb-scoreboard/frontend/server.js &
+
+          exec ${backend}/bin/uvicorn app.main:app --host 0.0.0.0 --port "\$BACKEND_PORT"
           WRAPPER
           chmod +x $out/bin/rb-scoreboard
 
@@ -97,10 +106,14 @@
         inherit backend;
 
         frontend = mkFrontend "https://rb.qew.ch";
-        frontend-local = mkFrontend "http://localhost:9400";
+        frontend-local = mkFrontend "http://localhost:8000";
 
-        default = mkApp self'.packages.frontend;
-        local = mkApp self'.packages.frontend-local;
+        default = mkApp { frontend = self'.packages.frontend; };
+        local = mkApp {
+          frontend = self'.packages.frontend-local;
+          backendPort = "8000";
+          frontendPort = "9400";
+        };
       };
     };
 }

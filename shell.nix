@@ -55,8 +55,8 @@ let
     echo "Running migrations..."
     /tmp/rb-scoreboard-local/bin/rb-scoreboard-migrate
 
-    echo "Starting on http://localhost:9400 ..."
-    exec /tmp/rb-scoreboard-local/bin/rb-scoreboard --host 127.0.0.1 --port 9400
+    echo "Starting backend on http://localhost:8000, frontend on http://localhost:9400 ..."
+    exec /tmp/rb-scoreboard-local/bin/rb-scoreboard
   '';
 
   db-ui = pkgs.writeShellScriptBin "db-ui" ''
