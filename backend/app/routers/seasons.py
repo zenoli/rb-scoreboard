@@ -1,4 +1,3 @@
-import asyncio
 import logging
 import re
 
@@ -143,10 +142,16 @@ async def _full_sync_for_season(season_id: int) -> None:
         async with AsyncSessionLocal() as session:
             _sync_status[season_id] = "syncing: event types"
             await sync_event_types(session)
+
+        async with AsyncSessionLocal() as session:
             _sync_status[season_id] = "syncing: teams & players"
             await sync_teams(session)
+
+        async with AsyncSessionLocal() as session:
             _sync_status[season_id] = "syncing: fixtures"
             await sync_fixtures(session)
+
+        async with AsyncSessionLocal() as session:
             _sync_status[season_id] = "syncing: events (this may take a while)"
             await sync_all_events(session)
         _sync_status[season_id] = "done"
@@ -181,6 +186,7 @@ async def setup_seasons_on_startup() -> None:
             await _do_activate(session, target)
             active = target
 
+        import asyncio
         logger.info("Active season: %s — triggering full sync", active.name)
         _sync_status[active.id] = "syncing"
         asyncio.create_task(_full_sync_for_season(active.id))

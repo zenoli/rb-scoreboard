@@ -41,7 +41,20 @@ export default function AdminPage() {
     }
     setSeasonLoading(true)
     api.fetchSeasonsFromSportmonks(savedKey)
-      .then(setSeasons)
+      .then((loaded) => {
+        setSeasons(loaded)
+        // Check if the active season is already syncing (e.g. from startup)
+        const active = loaded.find((s) => s.is_active)
+        if (active) {
+          api.seasonSyncStatus(active.id, savedKey).then((res) => {
+            if (res.status !== 'idle' && res.status !== 'done' && !res.status.startsWith('error')) {
+              setActivatingSeason(active.id)
+              setSyncStatusText(res.status)
+              pollSyncStatus(active.id, savedKey)
+            }
+          }).catch(() => {})
+        }
+      })
       .catch(() => api.seasons().then(setSeasons).catch(() => {}))
       .finally(() => setSeasonLoading(false))
   }, [savedKey])
