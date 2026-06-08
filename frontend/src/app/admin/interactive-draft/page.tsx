@@ -43,7 +43,7 @@ function buildSlotState(drafts: UserDraft[]): SlotState {
 function EmptySlot({ label, onClick }: { label: string; onClick: () => void }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => { e.stopPropagation(); onClick() }}
       className="flex flex-col items-center gap-0.5 group"
     >
       <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
@@ -68,7 +68,7 @@ function FilledSlot({
   onRemove: () => void
 }) {
   return (
-    <button onClick={onRemove} className="flex flex-col items-center gap-2 group">
+    <button onClick={(e) => { e.stopPropagation(); onRemove() }} className="flex flex-col items-center gap-2 group">
       <div className="relative">
         <PlayerIcon
           imagePath={imagePath}
@@ -125,6 +125,8 @@ function UserPitch({
   onRemovePlayer,
   onCoachClick,
   onRemoveCoach,
+  onPitchClick,
+  isFocused,
 }: {
   draft: UserDraft
   slotState: SlotState
@@ -132,6 +134,8 @@ function UserPitch({
   onRemovePlayer: (playerId: number) => void
   onCoachClick: () => void
   onRemoveCoach: () => void
+  onPitchClick?: () => void
+  isFocused?: boolean
 }) {
   const playerById = new Map(draft.players.map((p) => [p.id, { ...p, team_image_path: p.team_image_path ?? null }]))
 
@@ -140,44 +144,63 @@ function UserPitch({
     return ids.map((id) => (id != null ? (playerById.get(id) ?? null) : null))
   }
 
+  const pitchBackground = 'linear-gradient(180deg, #2d7a27 0%, #3a9e33 50%, #2d7a27 100%)'
+
+  const pitchContent = (
+    <>
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        viewBox="0 0 320 480"
+        preserveAspectRatio="xMidYMid meet"
+      >
+        <line x1="0" y1="240" x2="320" y2="240" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <circle cx="160" cy="240" r="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <circle cx="160" cy="240" r="2" fill="rgba(255,255,255,0.4)" />
+        <rect x="80" y="0" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="110" y="0" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="80" y="400" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="110" y="440" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+      </svg>
+      <div className="absolute inset-0 z-10 flex flex-col justify-between py-2">
+        <PositionRow slots={getSlotsForPos('FWD')} position="FWD" onEmptyClick={(i) => onSlotClick('FWD', i)} onFilledClick={onRemovePlayer} />
+        <PositionRow slots={getSlotsForPos('MID')} position="MID" onEmptyClick={(i) => onSlotClick('MID', i)} onFilledClick={onRemovePlayer} />
+        <PositionRow slots={getSlotsForPos('DEF')} position="DEF" onEmptyClick={(i) => onSlotClick('DEF', i)} onFilledClick={onRemovePlayer} />
+        <PositionRow slots={getSlotsForPos('GK')}  position="GK"  onEmptyClick={(i) => onSlotClick('GK',  i)} onFilledClick={onRemovePlayer} />
+      </div>
+    </>
+  )
+
   return (
     <div className="flex flex-col gap-1.5">
-      <div className="text-2xl font-bold text-center truncate px-1">{draft.username}</div>
-
-      {/* Pitch */}
-      <div
-        className="relative rounded-lg overflow-hidden w-full"
-        style={{
-          aspectRatio: '2 / 3',
-          background: 'linear-gradient(180deg, #2d7a27 0%, #3a9e33 50%, #2d7a27 100%)',
-        }}
-      >
-        <svg
-          className="absolute inset-0 w-full h-full pointer-events-none"
-          viewBox="0 0 320 480"
-          preserveAspectRatio="none"
-        >
-          <line x1="0" y1="240" x2="320" y2="240" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <circle cx="160" cy="240" r="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <circle cx="160" cy="240" r="2" fill="rgba(255,255,255,0.4)" />
-          <rect x="80" y="0" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <rect x="110" y="0" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <rect x="80" y="400" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <rect x="110" y="440" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-          <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
-        </svg>
-        <div className="absolute inset-0 z-10 flex flex-col justify-between py-2">
-          <PositionRow slots={getSlotsForPos('FWD')} position="FWD" onEmptyClick={(i) => onSlotClick('FWD', i)} onFilledClick={onRemovePlayer} />
-          <PositionRow slots={getSlotsForPos('MID')} position="MID" onEmptyClick={(i) => onSlotClick('MID', i)} onFilledClick={onRemovePlayer} />
-          <PositionRow slots={getSlotsForPos('DEF')} position="DEF" onEmptyClick={(i) => onSlotClick('DEF', i)} onFilledClick={onRemovePlayer} />
-          <PositionRow slots={getSlotsForPos('GK')}  position="GK"  onEmptyClick={(i) => onSlotClick('GK',  i)} onFilledClick={onRemovePlayer} />
-        </div>
+      <div className={`font-bold text-center truncate px-1 ${isFocused ? 'text-xl' : 'text-base'}`}>
+        {draft.username}
       </div>
 
+      {isFocused ? (
+        /* Focused: explicit 2/3 height, aspect ratio preserved */
+        <div
+          className={`relative rounded-lg overflow-hidden w-full ${onPitchClick ? 'cursor-pointer' : ''}`}
+          style={{ aspectRatio: '2/3', height: 'min(calc(72dvh - 56px), 60dvw)', background: pitchBackground }}
+          onClick={onPitchClick}
+        >
+          {pitchContent}
+        </div>
+      ) : (
+        /* Grid: full column width, 2/3 aspect ratio */
+        <div
+          className={`relative rounded-lg overflow-hidden w-full ${onPitchClick ? 'cursor-pointer' : ''}`}
+          style={{ aspectRatio: '2/3', background: pitchBackground }}
+          onClick={onPitchClick}
+        >
+          {pitchContent}
+        </div>
+      )}
+
       {/* Coach */}
-      <div className="flex justify-center py-1">
+      <div className="flex-shrink-0 flex justify-center py-1">
         {draft.coach ? (
-          <button onClick={onRemoveCoach} className="flex flex-col items-center gap-2 group">
+          <button onClick={(e) => { e.stopPropagation(); onRemoveCoach() }} className="flex flex-col items-center gap-2 group">
             <div className="relative">
               <PlayerIcon
                 imagePath={draft.coach.image_path}
@@ -196,7 +219,7 @@ function UserPitch({
           </button>
         ) : (
           <button
-            onClick={onCoachClick}
+            onClick={(e) => { e.stopPropagation(); onCoachClick() }}
             className="flex flex-col items-center gap-0.5 group"
           >
             <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
@@ -466,6 +489,7 @@ export default function InteractiveDraftPage() {
   const [modal, setModal] = useState<ModalState | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [focusedUserId, setFocusedUserId] = useState<number | null>(null)
 
   useEffect(() => {
     const key = localStorage.getItem('admin_api_key') ?? ''
@@ -552,7 +576,7 @@ export default function InteractiveDraftPage() {
       <div className="px-4 py-8">
         <div className="h-8 w-64 bg-muted animate-pulse rounded mb-6" />
         <div className="grid grid-cols-3 gap-4">
-          {Array.from({ length: 5 }).map((_, i) => (
+          {Array.from({ length: 6 }).map((_, i) => (
             <div key={i} className="h-64 bg-muted animate-pulse rounded-lg" />
           ))}
         </div>
@@ -561,14 +585,16 @@ export default function InteractiveDraftPage() {
   }
 
   const draftUsers = drafts.filter((d) => d.is_active)
+  const focusedDraft = focusedUserId != null ? draftUsers.find((d) => d.user_id === focusedUserId) ?? null : null
 
   return (
     <div className="px-4 py-6 flex flex-col gap-4">
+      {/* Header */}
       <div className="flex items-center gap-3 flex-wrap">
         <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground">← Admin</a>
         <h1 className="text-xl font-semibold">Interactive Draft</h1>
         <div className="ml-auto text-xs text-muted-foreground">
-          Click an empty slot to pick · Click a filled slot to undo
+          Click a pitch to focus · Click a slot to pick or undo
         </div>
       </div>
 
@@ -578,10 +604,11 @@ export default function InteractiveDraftPage() {
         </div>
       )}
 
-      <div className="flex flex-wrap justify-center gap-4">
+      {/* Pitch grid — 3 columns, 2 rows */}
+      <div className="grid grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
         {draftUsers.map((draft) => (
-          <div key={draft.user_id} className="w-90 flex-shrink-0">
           <UserPitch
+            key={draft.user_id}
             draft={draft}
             slotState={slotState}
             onSlotClick={(position, slotIndex) =>
@@ -592,10 +619,53 @@ export default function InteractiveDraftPage() {
               setModal({ userId: draft.user_id, username: draft.username, position: 'Coach', slotIndex: 0 })
             }
             onRemoveCoach={() => draft.coach && handleRemoveCoach(draft.user_id, draft.coach.id)}
+            onPitchClick={() => setFocusedUserId(draft.user_id)}
           />
-          </div>
         ))}
       </div>
+
+      {/* Focus overlay */}
+      <AnimatePresence>
+        {focusedDraft && (
+          <>
+            {/* Dimmed backdrop — clicking it dismisses focus */}
+            <motion.div
+              key="focus-backdrop"
+              className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setFocusedUserId(null)}
+            />
+            {/* Focused pitch card */}
+            <motion.div
+              key="focus-card"
+              className="fixed inset-0 z-[41] flex items-center justify-center pointer-events-none"
+              initial={{ scale: 0.85, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.85, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+            >
+              <div className="pointer-events-auto">
+                <UserPitch
+                  draft={focusedDraft}
+                  slotState={slotState}
+                  onSlotClick={(position, slotIndex) =>
+                    setModal({ userId: focusedDraft.user_id, username: focusedDraft.username, position, slotIndex })
+                  }
+                  onRemovePlayer={(playerId) => handleRemovePlayer(focusedDraft.user_id, playerId)}
+                  onCoachClick={() =>
+                    setModal({ userId: focusedDraft.user_id, username: focusedDraft.username, position: 'Coach', slotIndex: 0 })
+                  }
+                  onRemoveCoach={() => focusedDraft.coach && handleRemoveCoach(focusedDraft.user_id, focusedDraft.coach.id)}
+                  isFocused
+                />
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
 
       <AnimatePresence>
         {modal && (
