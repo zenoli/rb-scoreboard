@@ -65,6 +65,7 @@ in
 
       environment = {
         DATABASE_URL = "sqlite+aiosqlite:////${cfg.dataDir}/scoreboard.db";
+        FRONTEND_PORT = toString cfg.port;
       } // cfg.extraEnv;
 
       serviceConfig = {
@@ -73,7 +74,7 @@ in
         Group = cfg.group;
         EnvironmentFile = cfg.environmentFile;
         ExecStartPre = "${cfg.package}/bin/rb-scoreboard-migrate";
-        ExecStart = "${cfg.package}/bin/rb-scoreboard --host 0.0.0.0 --port ${toString cfg.port}";
+        ExecStart = "${cfg.package}/bin/rb-scoreboard";
         Restart = "on-failure";
         RestartSec = 5;
         WorkingDirectory = cfg.dataDir;
