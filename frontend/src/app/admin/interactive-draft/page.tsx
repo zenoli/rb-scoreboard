@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
-import type { CoachResponse, PlayerResponse, UserDraft } from '@/lib/types'
+import type { CoachResponse, PlayerResponse, Season, UserDraft } from '@/lib/types'
 
 const REQUIRED: Record<string, number> = { GK: 1, DEF: 5, MID: 5, FWD: 5 }
 type Position = 'FWD' | 'MID' | 'DEF' | 'GK' | 'Coach'
@@ -498,6 +498,8 @@ export default function InteractiveDraftPage() {
   const [drafts, setDrafts] = useState<UserDraft[] | null>(null)
   const [players, setPlayers] = useState<PlayerResponse[]>([])
   const [coaches, setCoaches] = useState<CoachResponse[]>([])
+  const [seasons, setSeasons] = useState<Season[]>([])
+  const [playerSeasonId, setPlayerSeasonId] = useState<number | null>(null)
   const [slotState, setSlotState] = useState<SlotState>(new Map())
   const [modal, setModal] = useState<ModalState | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -508,15 +510,39 @@ export default function InteractiveDraftPage() {
     const key = localStorage.getItem('admin_api_key') ?? ''
     setApiKey(key)
 
-    Promise.all([api.drafts(), api.players(), api.coaches()])
-      .then(([ds, ps, cs]) => {
+    Promise.all([api.drafts(), api.seasons()])
+      .then(([ds, ss]) => {
         setDrafts(ds)
+        setSlotState(buildSlotState(ds))
+        setSeasons(ss)
+        const active = ss.find((s: Season) => s.is_active)
+        const defaultSeasonId = active?.id ?? null
+        setPlayerSeasonId(defaultSeasonId)
+        return Promise.all([
+          api.players({ season_id: defaultSeasonId ?? undefined }),
+          api.coaches({ season_id: defaultSeasonId ?? undefined }),
+        ])
+      })
+      .then(([ps, cs]) => {
         setPlayers(ps)
         setCoaches(cs)
-        setSlotState(buildSlotState(ds))
       })
       .catch((e) => setError(e.message))
   }, [])
+
+  async function handlePlayerSeasonChange(seasonId: number) {
+    setPlayerSeasonId(seasonId)
+    try {
+      const [ps, cs] = await Promise.all([
+        api.players({ season_id: seasonId }),
+        api.coaches({ season_id: seasonId }),
+      ])
+      setPlayers(ps)
+      setCoaches(cs)
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : 'Failed to load players')
+    }
+  }
 
   async function refreshDrafts() {
     try {
@@ -606,6 +632,20 @@ export default function InteractiveDraftPage() {
       <div className="flex items-center gap-3 flex-wrap">
         <a href="/admin" className="text-sm text-muted-foreground hover:text-foreground">← Admin</a>
         <h1 className="text-xl font-semibold">Interactive Draft</h1>
+        {seasons.length > 0 && (
+          <div className="flex items-center gap-2 ml-4">
+            <span className="text-xs text-muted-foreground">Player pool:</span>
+            <select
+              value={playerSeasonId ?? ''}
+              onChange={(e) => handlePlayerSeasonChange(Number(e.target.value))}
+              className="text-sm rounded-md border px-2 py-1 bg-background focus:outline-none focus:ring-2 focus:ring-ring"
+            >
+              {seasons.map((s) => (
+                <option key={s.id} value={s.id}>WC {s.name}</option>
+              ))}
+            </select>
+          </div>
+        )}
         <div className="ml-auto text-xs text-muted-foreground">
           Click a pitch to focus · Click a slot to pick or undo
         </div>

@@ -98,9 +98,11 @@ async def get_player(player_id: int, session: AsyncSession = Depends(get_db)):
 async def get_players(
     team_id: int | None = Query(None),
     position_category: str | None = Query(None),
+    season_id: int | None = Query(None),
     session: AsyncSession = Depends(get_db),
 ):
-    season_id = await _get_active_season_id(session)
+    if season_id is None:
+        season_id = await _get_active_season_id(session)
 
     stmt = select(Player).options(
         selectinload(Player.team),
@@ -135,8 +137,12 @@ async def get_players(
 
 
 @router.get("/coaches", response_model=list[CoachResponse])
-async def get_coaches(session: AsyncSession = Depends(get_db)):
-    season_id = await _get_active_season_id(session)
+async def get_coaches(
+    season_id: int | None = Query(None),
+    session: AsyncSession = Depends(get_db),
+):
+    if season_id is None:
+        season_id = await _get_active_season_id(session)
 
     stmt = select(Coach).options(selectinload(Coach.team))
     if season_id is not None:

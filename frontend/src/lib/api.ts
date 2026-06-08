@@ -60,13 +60,18 @@ export const api = {
   playerEvents: (playerId: number) => get(`/api/players/${playerId}/events`),
   drafts: () => get('/api/drafts'),
   draftPoints: (userId: number) => get(`/api/drafts/${userId}/points`),
-  players: (params?: { position_category?: string; team_id?: number }) => {
+  players: (params?: { position_category?: string; team_id?: number; season_id?: number }) => {
     const qs = new URLSearchParams()
     if (params?.position_category) qs.set('position_category', params.position_category)
     if (params?.team_id) qs.set('team_id', String(params.team_id))
+    if (params?.season_id) qs.set('season_id', String(params.season_id))
     return get(`/api/players${qs.toString() ? '?' + qs.toString() : ''}`)
   },
-  coaches: () => get('/api/coaches'),
+  coaches: (params?: { season_id?: number }) => {
+    const qs = new URLSearchParams()
+    if (params?.season_id) qs.set('season_id', String(params.season_id))
+    return get(`/api/coaches${qs.toString() ? '?' + qs.toString() : ''}`)
+  },
   adminUsers: (key: string) => get('/admin/users', key),
   createUser: (body: { username: string; password: string }, key: string) =>
     postJson('/admin/users', body, key),
