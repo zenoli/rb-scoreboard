@@ -39,6 +39,26 @@ let
   sync-events    = mkSyncScript "events";
   sync-positions = mkSyncScript "positions";
 
+  run-prod = pkgs.writeShellScriptBin "run-prod" ''
+    set -e
+    echo "Building production bundle (localhost)..."
+    nix build .#local --out-link /tmp/rb-scoreboard-local
+
+    if [ -f "$PWD/.env" ]; then
+      set -a; source "$PWD/.env"; set +a
+    fi
+
+    export DATABASE_URL="''${DATABASE_URL:-sqlite+aiosqlite:////$PWD/backend/scoreboard.db}"
+    export JWT_SECRET="''${JWT_SECRET:-dev-jwt-secret}"
+    export ADMIN_API_KEY="''${ADMIN_API_KEY:-change-me-in-production}"
+
+    echo "Running migrations..."
+    /tmp/rb-scoreboard-local/bin/rb-scoreboard-migrate
+
+    echo "Starting on http://localhost:9400 ..."
+    exec /tmp/rb-scoreboard-local/bin/rb-scoreboard --host 127.0.0.1 --port 9400
+  '';
+
   db-ui = pkgs.writeShellScriptBin "db-ui" ''
     echo "Starting sqlite-web at http://localhost:8080 ..."
     exec ${pkgs.sqlite-web}/bin/sqlite_web "$BACKEND_DIR/scoreboard.db" --host 0.0.0.0 --port 8080
@@ -68,6 +88,7 @@ pkgs.mkShell {
     sync-events
     sync-positions
     sync-all
+    run-prod
     db-ui
     pkgs.sqlite-web
   ];
