@@ -131,9 +131,13 @@ async def _full_sync_for_season(season_id: int) -> None:
         from app.services.sync import sync_all_events, sync_event_types, sync_fixtures, sync_teams
 
         async with AsyncSessionLocal() as session:
+            _sync_status[season_id] = "syncing: event types"
             await sync_event_types(session)
+            _sync_status[season_id] = "syncing: teams & players"
             await sync_teams(session)
+            _sync_status[season_id] = "syncing: fixtures"
             await sync_fixtures(session)
+            _sync_status[season_id] = "syncing: events (this may take a while)"
             await sync_all_events(session)
         _sync_status[season_id] = "done"
         logger.info("Full sync for season %d complete", season_id)

@@ -18,6 +18,7 @@ export default function AdminPage() {
   const [seasons, setSeasons] = useState<Season[]>([])
   const [seasonLoading, setSeasonLoading] = useState(false)
   const [activatingSeason, setActivatingSeason] = useState<number | null>(null)
+  const [syncStatusText, setSyncStatusText] = useState<string>('')
 
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ username: '', password: '' })
@@ -68,7 +69,7 @@ export default function AdminPage() {
       const updated = await api.activateSeason(seasonId, savedKey)
       setSeasons((prev) => prev.map((s) => ({ ...s, is_active: s.id === updated.id })))
       // Poll sync status until done or error
-      pollSyncStatus(seasonId)
+      pollSyncStatus(seasonId, savedKey)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to switch season')
       setActivatingSeason(null)
@@ -77,17 +78,21 @@ export default function AdminPage() {
     }
   }
 
-  function pollSyncStatus(seasonId: number) {
+  function pollSyncStatus(seasonId: number, key: string) {
+    const deadline = Date.now() + 10 * 60 * 1000 // 10 min timeout
     const interval = setInterval(async () => {
       try {
-        const res = await api.seasonSyncStatus(seasonId, savedKey)
-        if (res.status === 'done' || res.status.startsWith('error')) {
+        const res = await api.seasonSyncStatus(seasonId, key)
+        setSyncStatusText(res.status)
+        if (res.status === 'done' || res.status.startsWith('error') || Date.now() > deadline) {
           clearInterval(interval)
           setActivatingSeason(null)
+          setSyncStatusText('')
         }
       } catch {
         clearInterval(interval)
         setActivatingSeason(null)
+        setSyncStatusText('')
       }
     }, 2000)
   }
@@ -195,7 +200,9 @@ export default function AdminPage() {
                   <span className="text-xs text-muted-foreground">#{s.sm_season_id}</span>
                   {s.is_active && <Badge className="text-xs">Active</Badge>}
                   {s.is_active && activatingSeason === s.id && (
-                    <span className="text-xs text-muted-foreground animate-pulse">syncing…</span>
+                    <span className="text-xs text-muted-foreground animate-pulse">
+                      {syncStatusText || 'syncing…'}
+                    </span>
                   )}
                 </div>
                 {savedKey && !s.is_active && (
