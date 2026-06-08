@@ -69,7 +69,8 @@ let
       color: #1a1a2e;
       background: #f8f9fc;
       margin: 0;
-      padding: 32px 48px;
+      padding: 32px 24px;
+      max-width: none;
     }
     h1 { font-size: 1.7em; color: #16213e; margin-bottom: 4px; }
     h2 { font-size: 1.25em; color: #16213e; margin-top: 2em; margin-bottom: 8px;
