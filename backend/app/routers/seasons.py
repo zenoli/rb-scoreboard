@@ -135,40 +135,30 @@ async def _do_activate(session: AsyncSession, season: Season) -> None:
     await seed_scoring_rules_for_season(session, season.id)
 
 
-async def _is_past_season_with_data(season_id: int) -> bool:
-    """Check if this is a past (non-newest) season that already has fixtures and players."""
+async def _season_has_data(season_id: int) -> bool:
+    """Check if a season already has fixtures and players in the DB."""
     async with AsyncSessionLocal() as session:
-        # Find the newest season by sm_season_id
-        result = await session.execute(
-            select(Season).order_by(Season.sm_season_id.desc()).limit(1)
-        )
-        newest = result.scalar_one_or_none()
-        if newest is None or newest.id == season_id:
-            return False
-
-        # Look up the season being synced
         result = await session.execute(select(Season).where(Season.id == season_id))
         season = result.scalar_one_or_none()
         if season is None:
             return False
 
-        # Check if fixtures and players already exist for this season
-        fixture_count = (await session.execute(
+        has_fixtures = (await session.execute(
             select(Fixture.id).where(Fixture.season_id == season.id).limit(1)
-        )).first()
-        player_count = (await session.execute(
+        )).first() is not None
+        has_players = (await session.execute(
             select(Player.id).where(Player.season_id == season.id).limit(1)
-        )).first()
+        )).first() is not None
 
-        return fixture_count is not None and player_count is not None
+        return has_fixtures and has_players
 
 
 async def _full_sync_for_season(season_id: int) -> None:
     """Background task: full data sync for the given season."""
     logger.info("Starting full sync for season %d", season_id)
     try:
-        if await _is_past_season_with_data(season_id):
-            logger.info("Past season %d already has data, skipping sync", season_id)
+        if await _season_has_data(season_id):
+            logger.info("Season %d already has data, skipping full sync", season_id)
             _sync_status[season_id] = "done"
             return
 
