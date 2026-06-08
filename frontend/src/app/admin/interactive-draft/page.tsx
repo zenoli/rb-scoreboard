@@ -40,14 +40,18 @@ function buildSlotState(drafts: UserDraft[]): SlotState {
 
 // ─── Small pitch components ───────────────────────────────────────────────────
 
-function EmptySlot({ label, onClick }: { label: string; onClick: () => void }) {
+function EmptySlot({ label, onClick, iconSize = 56 }: { label: string; onClick: () => void; iconSize?: number }) {
+  const inner = Math.round(iconSize * 0.43)
   return (
     <button
       onClick={(e) => { e.stopPropagation(); onClick() }}
       className="flex flex-col items-center gap-0.5 group"
     >
-      <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
-        <svg className="w-6 h-6 text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+      <div
+        className="rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all"
+        style={{ width: iconSize, height: iconSize }}
+      >
+        <svg style={{ width: inner, height: inner }} className="text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
           <path d="M10 10a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
         </svg>
       </div>
@@ -61,11 +65,13 @@ function FilledSlot({
   imagePath,
   teamImagePath,
   onRemove,
+  iconSize = 56,
 }: {
   name: string | null
   imagePath: string | null
   teamImagePath: string | null
   onRemove: () => void
+  iconSize?: number
 }) {
   return (
     <button onClick={(e) => { e.stopPropagation(); onRemove() }} className="flex flex-col items-center gap-2 group">
@@ -74,14 +80,14 @@ function FilledSlot({
           imagePath={imagePath}
           name={name}
           teamImagePath={teamImagePath}
-          size={56}
+          size={iconSize}
           avatarClassName="ring-2 ring-white shadow"
         />
         <div className="absolute inset-0 bg-red-500/70 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity" style={{ zIndex: 20 }}>
           <span className="text-white text-xs font-bold">✕</span>
         </div>
       </div>
-      <span className="text-[11px] text-white font-medium truncate max-w-[60px] leading-none">
+      <span className="text-[11px] text-white font-medium truncate leading-none" style={{ maxWidth: iconSize + 4 }}>
         {name?.split(' ').pop() ?? ''}
       </span>
     </button>
@@ -93,11 +99,13 @@ function PositionRow({
   position,
   onEmptyClick,
   onFilledClick,
+  iconSize,
 }: {
   slots: ({ id: number; display_name: string | null; image_path: string | null; team_image_path: string | null } | null)[]
   position: string
   onEmptyClick: (slotIndex: number) => void
   onFilledClick: (playerId: number) => void
+  iconSize?: number
 }) {
   return (
     <div className="flex justify-around items-end py-1">
@@ -109,9 +117,10 @@ function PositionRow({
             imagePath={player.image_path}
             teamImagePath={player.team_image_path}
             onRemove={() => onFilledClick(player.id)}
+            iconSize={iconSize}
           />
         ) : (
-          <EmptySlot key={`empty-${i}`} label={position} onClick={() => onEmptyClick(i)} />
+          <EmptySlot key={`empty-${i}`} label={position} onClick={() => onEmptyClick(i)} iconSize={iconSize} />
         )
       )}
     </div>
@@ -137,6 +146,7 @@ function UserPitch({
   onPitchClick?: () => void
   isFocused?: boolean
 }) {
+  const iconSize = isFocused ? 72 : 56
   const playerById = new Map(draft.players.map((p) => [p.id, { ...p, team_image_path: p.team_image_path ?? null }]))
 
   function getSlotsForPos(pos: string) {
@@ -163,17 +173,17 @@ function UserPitch({
         <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
       </svg>
       <div className="absolute inset-0 z-10 flex flex-col justify-between py-2">
-        <PositionRow slots={getSlotsForPos('FWD')} position="FWD" onEmptyClick={(i) => onSlotClick('FWD', i)} onFilledClick={onRemovePlayer} />
-        <PositionRow slots={getSlotsForPos('MID')} position="MID" onEmptyClick={(i) => onSlotClick('MID', i)} onFilledClick={onRemovePlayer} />
-        <PositionRow slots={getSlotsForPos('DEF')} position="DEF" onEmptyClick={(i) => onSlotClick('DEF', i)} onFilledClick={onRemovePlayer} />
-        <PositionRow slots={getSlotsForPos('GK')}  position="GK"  onEmptyClick={(i) => onSlotClick('GK',  i)} onFilledClick={onRemovePlayer} />
+        <PositionRow slots={getSlotsForPos('FWD')} position="FWD" onEmptyClick={(i) => onSlotClick('FWD', i)} onFilledClick={onRemovePlayer} iconSize={iconSize} />
+        <PositionRow slots={getSlotsForPos('MID')} position="MID" onEmptyClick={(i) => onSlotClick('MID', i)} onFilledClick={onRemovePlayer} iconSize={iconSize} />
+        <PositionRow slots={getSlotsForPos('DEF')} position="DEF" onEmptyClick={(i) => onSlotClick('DEF', i)} onFilledClick={onRemovePlayer} iconSize={iconSize} />
+        <PositionRow slots={getSlotsForPos('GK')}  position="GK"  onEmptyClick={(i) => onSlotClick('GK',  i)} onFilledClick={onRemovePlayer} iconSize={iconSize} />
       </div>
     </>
   )
 
   return (
     <div className="flex flex-col gap-1.5">
-      <div className={`font-bold text-center truncate px-1 ${isFocused ? 'text-xl' : 'text-base'}`}>
+      <div className={`font-bold text-center truncate px-1 ${isFocused ? 'text-3xl' : 'text-xl'}`}>
         {draft.username}
       </div>
 
@@ -181,7 +191,7 @@ function UserPitch({
         /* Focused: explicit 2/3 height, aspect ratio preserved */
         <div
           className={`relative rounded-lg overflow-hidden w-full ${onPitchClick ? 'cursor-pointer' : ''}`}
-          style={{ aspectRatio: '2/3', height: 'min(calc(72dvh - 56px), 60dvw)', background: pitchBackground }}
+          style={{ aspectRatio: '2/3', height: 'min(calc(80dvh - 56px), 70dvw)', background: pitchBackground }}
           onClick={onPitchClick}
         >
           {pitchContent}
@@ -206,14 +216,14 @@ function UserPitch({
                 imagePath={draft.coach.image_path}
                 name={draft.coach.display_name}
                 teamImagePath={draft.coach.team_image_path}
-                size={56}
+                size={iconSize}
                 avatarClassName="ring-2 ring-white shadow"
               />
               <div className="absolute inset-0 bg-red-500/70 rounded-full opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity" style={{ zIndex: 20 }}>
                 <span className="text-white text-xs font-bold">✕</span>
               </div>
             </div>
-            <span className="text-[11px] text-white font-medium truncate max-w-[60px] leading-none">
+            <span className="text-[11px] text-white font-medium truncate leading-none" style={{ maxWidth: iconSize + 4 }}>
               {draft.coach.display_name?.split(' ').pop() ?? ''}
             </span>
           </button>
@@ -222,8 +232,11 @@ function UserPitch({
             onClick={(e) => { e.stopPropagation(); onCoachClick() }}
             className="flex flex-col items-center gap-0.5 group"
           >
-            <div className="w-14 h-14 rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all">
-              <svg className="w-6 h-6 text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
+            <div
+              className="rounded-full border-2 border-dashed border-white/40 flex items-center justify-center bg-black/5 group-hover:bg-black/25 group-hover:border-white/80 transition-all"
+              style={{ width: iconSize, height: iconSize }}
+            >
+              <svg style={{ width: Math.round(iconSize * 0.43), height: Math.round(iconSize * 0.43) }} className="text-white/40 group-hover:text-white/70 transition-colors" fill="currentColor" viewBox="0 0 20 20">
                 <path d="M10 10a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" />
               </svg>
             </div>
@@ -605,7 +618,7 @@ export default function InteractiveDraftPage() {
       )}
 
       {/* Pitch grid — 3 columns, 2 rows */}
-      <div className="grid grid-cols-3 gap-4 max-w-5xl mx-auto w-full">
+      <div className="grid grid-cols-3 gap-7 max-w-6xl mx-auto w-full">
         {draftUsers.map((draft) => (
           <UserPitch
             key={draft.user_id}
@@ -641,7 +654,7 @@ export default function InteractiveDraftPage() {
             {/* Focused pitch card */}
             <motion.div
               key="focus-card"
-              className="fixed inset-0 z-[41] flex items-center justify-center pointer-events-none"
+              className="fixed inset-0 z-[41] flex items-center justify-center pt-16 pointer-events-none"
               initial={{ scale: 0.85, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.85, opacity: 0 }}
