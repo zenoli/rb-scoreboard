@@ -8,6 +8,8 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal, get_db
+from app.models.fixture import Fixture
+from app.models.player import Player
 from app.models.season import Season, SeasonParticipant
 from app.models.user import User
 from app.routers.deps import require_admin_key
@@ -133,10 +135,43 @@ async def _do_activate(session: AsyncSession, season: Season) -> None:
     await seed_scoring_rules_for_season(session, season.id)
 
 
+async def _is_past_season_with_data(season_id: int) -> bool:
+    """Check if this is a past (non-newest) season that already has fixtures and players."""
+    async with AsyncSessionLocal() as session:
+        # Find the newest season by sm_season_id
+        result = await session.execute(
+            select(Season).order_by(Season.sm_season_id.desc()).limit(1)
+        )
+        newest = result.scalar_one_or_none()
+        if newest is None or newest.id == season_id:
+            return False
+
+        # Look up the season being synced
+        result = await session.execute(select(Season).where(Season.id == season_id))
+        season = result.scalar_one_or_none()
+        if season is None:
+            return False
+
+        # Check if fixtures and players already exist for this season
+        fixture_count = (await session.execute(
+            select(Fixture.id).where(Fixture.season_id == season.id).limit(1)
+        )).first()
+        player_count = (await session.execute(
+            select(Player.id).where(Player.season_id == season.id).limit(1)
+        )).first()
+
+        return fixture_count is not None and player_count is not None
+
+
 async def _full_sync_for_season(season_id: int) -> None:
     """Background task: full data sync for the given season."""
     logger.info("Starting full sync for season %d", season_id)
     try:
+        if await _is_past_season_with_data(season_id):
+            logger.info("Past season %d already has data, skipping sync", season_id)
+            _sync_status[season_id] = "done"
+            return
+
         from app.services.sync import sync_all_events, sync_event_types, sync_fixtures, sync_teams
 
         async with AsyncSessionLocal() as session:
