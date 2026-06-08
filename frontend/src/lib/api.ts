@@ -98,4 +98,11 @@ export const api = {
     put(`/admin/seasons/${seasonId}/activate`, {}, key),
   seasonSyncStatus: (seasonId: number, key: string) =>
     get(`/admin/seasons/${seasonId}/sync-status`, key),
+  resetDb: async (key: string) => {
+    const res = await fetch(`${API_BASE}/admin/reset-db`, {
+      method: 'POST',
+      headers: { 'X-Admin-Key': key },
+    })
+    if (!res.ok) throw new Error(`${res.status} ${res.statusText}`)
+  },
 }

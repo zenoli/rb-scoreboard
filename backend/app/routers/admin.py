@@ -514,6 +514,21 @@ async def set_position_category(
 
 
 # ---------------------------------------------------------------------------
+# Reset database
+# ---------------------------------------------------------------------------
+
+@router.post("/reset-db", status_code=status.HTTP_204_NO_CONTENT)
+async def reset_db(session: AsyncSession = Depends(get_db)):
+    """Delete all users, drafts, season participants, and tournament configs."""
+    from sqlalchemy import delete as sa_delete
+    await session.execute(sa_delete(Draft))
+    await session.execute(sa_delete(SeasonParticipant))
+    await session.execute(sa_delete(TournamentConfig))
+    await session.execute(sa_delete(User))
+    await session.commit()
+
+
+# ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 

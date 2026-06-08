@@ -28,6 +28,11 @@ export default function AdminPage() {
   const [deleteTarget, setDeleteTarget] = useState<AdminUser | null>(null)
   const [deleteLoading, setDeleteLoading] = useState(false)
 
+  const [resetModalOpen, setResetModalOpen] = useState(false)
+  const [resetConfirmText, setResetConfirmText] = useState('')
+  const [resetLoading, setResetLoading] = useState(false)
+  const [resetError, setResetError] = useState<string | null>(null)
+
   useEffect(() => {
     const stored = localStorage.getItem('admin_api_key') ?? ''
     setSavedKey(stored)
@@ -166,6 +171,21 @@ export default function AdminPage() {
       setUsers((prev) => prev ? prev.map((u) => u.id === user.id ? updated : u) : prev)
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Failed to update user')
+    }
+  }
+
+  async function handleResetDb() {
+    setResetLoading(true)
+    setResetError(null)
+    try {
+      await api.resetDb(savedKey)
+      setUsers([])
+      setResetModalOpen(false)
+      setResetConfirmText('')
+    } catch (e) {
+      setResetError(e instanceof Error ? e.message : 'Failed to reset database')
+    } finally {
+      setResetLoading(false)
     }
   }
 
@@ -334,6 +354,23 @@ export default function AdminPage() {
               </div>
             )}
           </section>
+
+          {/* Danger Zone */}
+          <section className="rounded-lg border border-destructive/40 p-4 bg-card flex flex-col gap-3">
+            <h2 className="font-medium text-sm text-destructive">Danger Zone</h2>
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium">Reset database</p>
+                <p className="text-xs text-muted-foreground mt-0.5">Permanently delete all users, drafts, and results. Cannot be undone.</p>
+              </div>
+              <button
+                onClick={() => { setResetModalOpen(true); setResetConfirmText(''); setResetError(null) }}
+                className="rounded-md bg-destructive text-destructive-foreground px-3 py-1.5 text-xs font-medium hover:bg-destructive/90 transition-colors"
+              >
+                Reset DB
+              </button>
+            </div>
+          </section>
         </>
       )}
 
@@ -359,6 +396,45 @@ export default function AdminPage() {
                 className="rounded-md bg-destructive text-destructive-foreground px-4 py-2 text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
               >
                 {deleteLoading ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reset DB modal */}
+      {resetModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-card rounded-lg border p-6 w-full max-w-sm flex flex-col gap-4 mx-4">
+            <h2 className="font-semibold text-base">Reset database?</h2>
+            <p className="text-sm text-muted-foreground">
+              This will permanently delete <span className="font-medium text-foreground">all users, drafts, and results</span>. This cannot be undone.
+            </p>
+            <div className="flex flex-col gap-1.5">
+              <label className="text-xs text-muted-foreground">Type <span className="font-mono font-medium text-foreground">reset</span> to confirm</label>
+              <input
+                type="text"
+                value={resetConfirmText}
+                onChange={(e) => setResetConfirmText(e.target.value)}
+                placeholder="reset"
+                className="rounded-md border px-3 py-2 text-sm bg-background focus:outline-none focus:ring-2 focus:ring-destructive"
+              />
+            </div>
+            {resetError && <p className="text-xs text-destructive">{resetError}</p>}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => { setResetModalOpen(false); setResetConfirmText('') }}
+                className="rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent transition-colors"
+                disabled={resetLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleResetDb}
+                disabled={resetLoading || resetConfirmText !== 'reset'}
+                className="rounded-md bg-destructive text-destructive-foreground px-4 py-2 text-sm font-medium hover:bg-destructive/90 transition-colors disabled:opacity-50"
+              >
+                {resetLoading ? 'Resetting…' : 'Reset database'}
               </button>
             </div>
           </div>
