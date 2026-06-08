@@ -62,7 +62,26 @@
         meta.description = "RB Scoreboard frontend (standalone)";
       };
 
-      mkApp = { frontend, backendPort ? "8000", frontendPort ? "3000" }: pkgs.stdenv.mkDerivation {
+      mkApp = { frontend, backendPort ? "8000", frontendPort ? "3000" }:
+        let
+          node = pkgs.nodejs;
+          wrapper = pkgs.writeShellScript "rb-scoreboard" ''
+            BACKEND_PORT="''${BACKEND_PORT:-${backendPort}}"
+            FRONTEND_PORT="''${FRONTEND_PORT:-${frontendPort}}"
+
+            cleanup() { kill 0 2>/dev/null; }
+            trap cleanup EXIT
+
+            PORT="$FRONTEND_PORT" HOSTNAME=0.0.0.0 ${node}/bin/node @frontend@/server.js &
+
+            exec ${backend}/bin/uvicorn app.main:app --host 0.0.0.0 --port "$BACKEND_PORT"
+          '';
+          migrateWrapper = pkgs.writeShellScript "rb-scoreboard-migrate" ''
+            cd @share@
+            exec ${backend}/bin/alembic upgrade head
+          '';
+        in
+        pkgs.stdenv.mkDerivation {
         pname = "rb-scoreboard";
         version = "0.1.0";
         dontUnpack = true;
@@ -74,25 +93,12 @@
           cp -r ${../backend/alembic} $out/share/rb-scoreboard/alembic
           cp ${../backend/alembic.ini} $out/share/rb-scoreboard/alembic.ini
 
-          cat > $out/bin/rb-scoreboard <<WRAPPER
-          #!/usr/bin/env bash
-          BACKEND_PORT="''${BACKEND_PORT:-${backendPort}}"
-          FRONTEND_PORT="''${FRONTEND_PORT:-${frontendPort}}"
-
-          cleanup() { kill 0 2>/dev/null; }
-          trap cleanup EXIT
-
-          PORT="\$FRONTEND_PORT" HOSTNAME=0.0.0.0 ${pkgs.nodejs}/bin/node $out/share/rb-scoreboard/frontend/server.js &
-
-          exec ${backend}/bin/uvicorn app.main:app --host 0.0.0.0 --port "\$BACKEND_PORT"
-          WRAPPER
+          substitute ${wrapper} $out/bin/rb-scoreboard \
+            --replace-fail "@frontend@" "$out/share/rb-scoreboard/frontend"
           chmod +x $out/bin/rb-scoreboard
 
-          cat > $out/bin/rb-scoreboard-migrate <<WRAPPER
-          #!/usr/bin/env bash
-          cd $out/share/rb-scoreboard
-          exec ${backend}/bin/alembic upgrade head
-          WRAPPER
+          substitute ${migrateWrapper} $out/bin/rb-scoreboard-migrate \
+            --replace-fail "@share@" "$out/share/rb-scoreboard"
           chmod +x $out/bin/rb-scoreboard-migrate
         '';
 

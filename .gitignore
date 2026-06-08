@@ -7,10 +7,11 @@ skills-lock.json
 backend/.venv/
 backend/__pycache__/
 backend/**/__pycache__/
-backend/*.db
-backend/*.db-shm
-backend/*.db-wal
-backend/*.db.bak.*
+*.db
+*.db-journal
+*.db-shm
+*.db-wal
+*.db.bak.*
 
 result
 
