@@ -10,7 +10,7 @@ from app.database import AsyncSessionLocal, engine
 from app.models import *  # noqa: F401,F403 — ensures all models are registered with Base
 from app.routers import admin, auth, drafts, fixtures, players, scores
 from app.routers.seasons import admin_router as seasons_admin_router
-from app.routers.seasons import bootstrap_seasons_if_empty
+from app.routers.seasons import setup_seasons_on_startup
 from app.routers.seasons import public_router as seasons_public_router
 from app.scheduler import start_scheduler, stop_scheduler
 from app.services.seeding import seed_all
@@ -20,7 +20,7 @@ from app.services.seeding import seed_all
 async def lifespan(app: FastAPI):
     async with AsyncSessionLocal() as session:
         await seed_all(session)
-    await bootstrap_seasons_if_empty()
+    await setup_seasons_on_startup()
     start_scheduler()
     yield
     stop_scheduler()

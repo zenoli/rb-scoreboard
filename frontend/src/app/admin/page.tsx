@@ -35,8 +35,16 @@ export default function AdminPage() {
   }, [])
 
   useEffect(() => {
-    api.seasons().then(setSeasons).catch(() => {})
-  }, [])
+    if (!savedKey) {
+      api.seasons().then(setSeasons).catch(() => {})
+      return
+    }
+    setSeasonLoading(true)
+    api.fetchSeasonsFromSportmonks(savedKey)
+      .then(setSeasons)
+      .catch(() => api.seasons().then(setSeasons).catch(() => {}))
+      .finally(() => setSeasonLoading(false))
+  }, [savedKey])
 
   useEffect(() => {
     if (!savedKey) return

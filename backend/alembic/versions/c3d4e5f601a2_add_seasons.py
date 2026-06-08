@@ -25,8 +25,8 @@ def upgrade() -> None:
         sa.PrimaryKeyConstraint('id'),
     )
 
-    # 2. Seed WC2022 as the initial active season
-    op.execute("INSERT INTO seasons (id, name, sm_season_id, is_active) VALUES (1, 'WC2022', 18017, 1)")
+    # 2. Seed WC2022 as an inactive placeholder (startup will activate WC2026)
+    op.execute("INSERT INTO seasons (id, name, sm_season_id, is_active) VALUES (1, '2022', 18017, 0)")
 
     # 3. Create season_participants table
     op.create_table(

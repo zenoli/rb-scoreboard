@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import re
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel
@@ -44,7 +45,7 @@ class SyncStatusResponse(BaseModel):
 
 @public_router.get("/seasons", response_model=list[SeasonResponse])
 async def list_seasons(session: AsyncSession = Depends(get_db)):
-    result = await session.execute(select(Season).order_by(Season.id))
+    result = await session.execute(select(Season).order_by(Season.sm_season_id.desc()))
     return result.scalars().all()
 
 
@@ -52,7 +53,7 @@ async def list_seasons(session: AsyncSession = Depends(get_db)):
 async def fetch_seasons_from_sportmonks(session: AsyncSession = Depends(get_db)):
     """Fetch all WC seasons from Sportmonks league 732 and upsert into DB."""
     await _upsert_wc_seasons(session)
-    result = await session.execute(select(Season).order_by(Season.id))
+    result = await session.execute(select(Season).order_by(Season.sm_season_id.desc()))
     return result.scalars().all()
 
 
@@ -85,21 +86,30 @@ async def get_sync_status(season_id: int):
 # ---------------------------------------------------------------------------
 
 
+def _season_display_name(raw_name: str) -> str:
+    """Extract the year from a Sportmonks season name, e.g. 'World Cup 2022' → '2022'."""
+    m = re.search(r"\b(20\d{2})\b", raw_name)
+    return m.group(1) if m else raw_name
+
+
 async def _upsert_wc_seasons(session: AsyncSession) -> list[Season]:
-    """Fetch WC seasons from Sportmonks and insert any that don't exist yet."""
+    """Fetch WC seasons from Sportmonks and upsert (insert or update name) into DB."""
     resp = await client.get("football", "leagues", WC_LEAGUE_ID, params={"include": "seasons"})
     raw = (resp.get("data") or {}).get("seasons") or []
     for s in raw:
         sm_id = s["id"]
-        name = s.get("name") or f"Season {sm_id}"
-        existing = await session.execute(select(Season).where(Season.sm_season_id == sm_id))
-        if existing.scalar_one_or_none() is None:
+        name = _season_display_name(s.get("name") or f"Season {sm_id}")
+        result = await session.execute(select(Season).where(Season.sm_season_id == sm_id))
+        existing = result.scalars().first()
+        if existing is None:
             new_season = Season(name=name, sm_season_id=sm_id, is_active=False)
             session.add(new_season)
             await session.flush()
             await seed_scoring_rules_for_season(session, new_season.id)
+        else:
+            existing.name = name
     await session.commit()
-    result = await session.execute(select(Season).order_by(Season.id))
+    result = await session.execute(select(Season).order_by(Season.sm_season_id.desc()))
     return list(result.scalars().all())
 
 
@@ -146,30 +156,31 @@ async def _full_sync_for_season(season_id: int) -> None:
         logger.exception("Full sync for season %d failed", season_id)
 
 
-async def bootstrap_seasons_if_empty() -> None:
-    """Called at startup: fetch WC seasons and activate WC2026 if DB is empty."""
+async def setup_seasons_on_startup() -> None:
+    """Called at startup: fetch WC seasons, ensure WC2026 is active, kick off sync."""
     async with AsyncSessionLocal() as session:
-        existing = await session.execute(select(Season))
-        if existing.scalars().all():
-            return  # already populated
-
-        logger.info("No seasons found — fetching from Sportmonks (league %d)…", WC_LEAGUE_ID)
+        logger.info("Fetching WC seasons from Sportmonks (league %d)…", WC_LEAGUE_ID)
         try:
             seasons = await _upsert_wc_seasons(session)
         except Exception:
             logger.exception("Failed to fetch seasons from Sportmonks at startup")
-            return
+            # Fall back to whatever is in the DB
+            result = await session.execute(select(Season).order_by(Season.sm_season_id.desc()))
+            seasons = list(result.scalars().all())
 
         if not seasons:
-            logger.warning("Sportmonks returned no seasons for league %d", WC_LEAGUE_ID)
+            logger.warning("No seasons available")
             return
 
-        # Prefer the season whose name contains "2026", otherwise pick highest sm_season_id
-        target = next((s for s in seasons if "2026" in s.name), None)
-        if target is None:
-            target = max(seasons, key=lambda s: s.sm_season_id)
+        # Always prefer the newest season (highest sm_season_id) as the default
+        target = max(seasons, key=lambda s: s.sm_season_id)
+        active = next((s for s in seasons if s.is_active), None)
 
-        logger.info("Auto-activating season: %s (sm_id=%d)", target.name, target.sm_season_id)
-        await _do_activate(session, target)
-        _sync_status[target.id] = "syncing"
-        asyncio.create_task(_full_sync_for_season(target.id))
+        if active is None or active.sm_season_id != target.sm_season_id:
+            logger.info("Activating default season: %s (sm_id=%d)", target.name, target.sm_season_id)
+            await _do_activate(session, target)
+            active = target
+
+        logger.info("Active season: %s — triggering full sync", active.name)
+        _sync_status[active.id] = "syncing"
+        asyncio.create_task(_full_sync_for_season(active.id))
