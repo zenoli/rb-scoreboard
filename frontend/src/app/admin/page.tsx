@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { api } from '@/lib/api'
 import type { AdminUser, Season } from '@/lib/types'
 
-const SYNC_TARGETS = ['teams', 'fixtures', 'events', 'all_events', 'event_types', 'lineups']
+const SYNC_TARGETS = ['teams', 'fixtures', 'events', 'all_events', 'event_types', 'lineups', 'all_lineups']
 
 export default function AdminPage() {
   const [apiKey, setApiKey] = useState('')
@@ -104,7 +104,18 @@ export default function AdminPage() {
     }
   }
 
-  function pollSyncStatus(seasonId: number, key: string) {
+  async function handleSyncSeason(seasonId: number) {
+    setActivatingSeason(seasonId)
+    try {
+      await api.syncSeason(seasonId, savedKey)
+      pollSyncStatus(seasonId, savedKey)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Failed to start sync')
+      setActivatingSeason(null)
+    }
+  }
+
+function pollSyncStatus(seasonId: number, key: string) {
     const deadline = Date.now() + 10 * 60 * 1000 // 10 min timeout
     const interval = setInterval(async () => {
       try {
@@ -246,14 +257,25 @@ export default function AdminPage() {
                     </span>
                   )}
                 </div>
-                {savedKey && !s.is_active && (
-                  <button
-                    onClick={() => handleActivateSeason(s.id)}
-                    disabled={seasonLoading || activatingSeason !== null}
-                    className="text-xs text-muted-foreground hover:text-foreground underline transition-colors disabled:opacity-50"
-                  >
-                    Activate
-                  </button>
+                {savedKey && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => handleSyncSeason(s.id)}
+                      disabled={activatingSeason !== null}
+                      className="text-xs text-muted-foreground hover:text-foreground underline transition-colors disabled:opacity-50"
+                    >
+                      Sync
+                    </button>
+                    {!s.is_active && (
+                      <button
+                        onClick={() => handleActivateSeason(s.id)}
+                        disabled={seasonLoading || activatingSeason !== null}
+                        className="text-xs text-muted-foreground hover:text-foreground underline transition-colors disabled:opacity-50"
+                      >
+                        Activate
+                      </button>
+                    )}
+                  </div>
                 )}
               </div>
             ))}

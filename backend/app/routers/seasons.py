@@ -77,6 +77,23 @@ async def activate_season(
     return season
 
 
+@admin_router.post("/seasons/{season_id}/sync")
+async def sync_season(
+    season_id: int,
+    background_tasks: BackgroundTasks,
+    session: AsyncSession = Depends(get_db),
+):
+    result = await session.execute(select(Season).where(Season.id == season_id))
+    season = result.scalar_one_or_none()
+    if season is None:
+        raise HTTPException(status_code=404, detail="Season not found")
+
+    _sync_status[season_id] = "syncing"
+    background_tasks.add_task(_force_full_sync_for_season, season_id)
+    return {"season_id": season_id, "status": "syncing"}
+
+
+
 @admin_router.get("/seasons/{season_id}/sync-status", response_model=SyncStatusResponse)
 async def get_sync_status(season_id: int):
     return SyncStatusResponse(season_id=season_id, status=_sync_status.get(season_id, "idle"))
@@ -184,6 +201,36 @@ async def _full_sync_for_season(season_id: int) -> None:
     except Exception as exc:
         _sync_status[season_id] = f"error: {exc}"
         logger.exception("Full sync for season %d failed", season_id)
+
+
+
+async def _force_full_sync_for_season(season_id: int) -> None:
+    """Background task: full data sync for the given season, always runs."""
+    logger.info("Starting forced full sync for season %d", season_id)
+    try:
+        from app.services.sync import sync_all_events, sync_event_types, sync_fixtures, sync_teams
+
+        async with AsyncSessionLocal() as session:
+            _sync_status[season_id] = "syncing: event types"
+            await sync_event_types(session)
+
+        async with AsyncSessionLocal() as session:
+            _sync_status[season_id] = "syncing: teams & players"
+            await sync_teams(session, season_id)
+
+        async with AsyncSessionLocal() as session:
+            _sync_status[season_id] = "syncing: fixtures"
+            await sync_fixtures(session, season_id)
+
+        async with AsyncSessionLocal() as session:
+            _sync_status[season_id] = "syncing: events (this may take a while)"
+            await sync_all_events(session, season_id)
+
+        _sync_status[season_id] = "done"
+        logger.info("Forced full sync for season %d complete", season_id)
+    except Exception as exc:
+        _sync_status[season_id] = f"error: {exc}"
+        logger.exception("Forced full sync for season %d failed", season_id)
 
 
 async def setup_seasons_on_startup() -> None:

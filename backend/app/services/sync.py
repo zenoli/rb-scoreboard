@@ -55,7 +55,7 @@ async def _upsert_composite(
 
 
 # ---------------------------------------------------------------------------
-# Active season helper
+# Season helpers
 # ---------------------------------------------------------------------------
 
 async def _get_active_season(session: AsyncSession) -> Season:
@@ -63,6 +63,16 @@ async def _get_active_season(session: AsyncSession) -> Season:
     season = result.scalar_one_or_none()
     if season is None:
         raise RuntimeError("No active season configured. Create and activate a season first.")
+    return season
+
+
+async def _get_season(session: AsyncSession, season_id: int | None = None) -> Season:
+    if season_id is None:
+        return await _get_active_season(session)
+    result = await session.execute(select(Season).where(Season.id == season_id))
+    season = result.scalar_one_or_none()
+    if season is None:
+        raise RuntimeError(f"Season {season_id} not found.")
     return season
 
 
@@ -87,8 +97,8 @@ async def sync_event_types(session: AsyncSession) -> None:
     logger.info("Synced %d event types", len(rows))
 
 
-async def sync_teams(session: AsyncSession) -> None:
-    season = await _get_active_season(session)
+async def sync_teams(session: AsyncSession, season_id: int | None = None) -> None:
+    season = await _get_season(session, season_id)
     logger.info("Syncing teams, players, and coaches for season %s...", season.name)
     raw = await client.get_paginated(
         "football", "teams", "seasons", season.sm_season_id,
@@ -150,9 +160,9 @@ async def sync_teams(session: AsyncSession) -> None:
     )
 
 
-async def sync_fixtures(session: AsyncSession) -> None:
+async def sync_fixtures(session: AsyncSession, season_id: int | None = None) -> None:
     """Sync fixtures from the schedules endpoint (data → stages → rounds → fixtures)."""
-    season = await _get_active_season(session)
+    season = await _get_season(session, season_id)
     logger.info("Syncing fixtures for season %s...", season.name)
     data = await client.get(
         "football", "schedules", "seasons", season.sm_season_id,
@@ -185,9 +195,9 @@ async def sync_fixtures(session: AsyncSession) -> None:
     logger.info("Synced %d fixtures, %d participants", len(fixture_rows), len(participant_rows))
 
 
-async def sync_all_events(session: AsyncSession) -> None:
-    """Sync events for ALL fixtures of the active season regardless of state."""
-    season = await _get_active_season(session)
+async def sync_all_events(session: AsyncSession, season_id: int | None = None) -> None:
+    """Sync events for ALL fixtures of the given (or active) season regardless of state."""
+    season = await _get_season(session, season_id)
     logger.info("Syncing events for all fixtures of season %s...", season.name)
     result = await session.execute(
         select(Fixture.id).where(Fixture.season_id == season.id)
@@ -254,9 +264,9 @@ async def sync_lineups(session: AsyncSession) -> None:
     await _sync_lineups_for_fixtures(session, active_ids)
 
 
-async def sync_all_lineups(session: AsyncSession) -> None:
-    """Sync lineups for ALL fixtures of the active season regardless of state."""
-    season = await _get_active_season(session)
+async def sync_all_lineups(session: AsyncSession, season_id: int | None = None) -> None:
+    """Sync lineups for ALL fixtures of the given (or active) season regardless of state."""
+    season = await _get_season(session, season_id)
     logger.info("Syncing lineups for all fixtures of season %s...", season.name)
     result = await session.execute(
         select(Fixture.id).where(Fixture.season_id == season.id)

@@ -101,6 +101,8 @@ export const api = {
   fetchSeasonsFromSportmonks: (key: string) => post('/admin/seasons/fetch', key),
   activateSeason: (seasonId: number, key: string) =>
     put(`/admin/seasons/${seasonId}/activate`, {}, key),
+  syncSeason: (seasonId: number, key: string) =>
+    post(`/admin/seasons/${seasonId}/sync`, key),
   seasonSyncStatus: (seasonId: number, key: string) =>
     get(`/admin/seasons/${seasonId}/sync-status`, key),
   resetDb: async (key: string) => {
