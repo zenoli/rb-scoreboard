@@ -707,7 +707,7 @@ async def compute_player_score_events(session: AsyncSession, player_id: int) -> 
 
     player_result = await session.execute(
         select(Player)
-        .where(Player.id == player_id)
+        .where(Player.id == player_id, Player.season_id == season.id)
         .options(selectinload(Player.team), selectinload(Player.position))
     )
     player = player_result.scalar_one_or_none()
