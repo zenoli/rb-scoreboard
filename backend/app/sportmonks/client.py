@@ -32,7 +32,7 @@ async def get_paginated(
     while True:
         p = dict(params or {})
         p["page"] = page
-        p["per_page"] = 50
+        p.setdefault("per_page", 100)
         data = await get(*path_segments, params=p)
         items = data.get("data", [])
         collected.extend(items)

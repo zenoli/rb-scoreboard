@@ -308,7 +308,7 @@ function PickModal({
 
   const countries = useMemo(() => {
     const seen = new Map<number, { id: number; name: string; image_path: string | null; short_code: string | null }>()
-    for (const p of positionPlayers) {
+    for (const p of players) {
       if (p.team_id != null && !seen.has(p.team_id)) {
         seen.set(p.team_id, {
           id: p.team_id,
@@ -319,7 +319,7 @@ function PickModal({
       }
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
-  }, [positionPlayers])
+  }, [players])
 
   const filteredPlayers = positionPlayers
     .filter((p) => countryFilter == null || p.team_id === countryFilter)

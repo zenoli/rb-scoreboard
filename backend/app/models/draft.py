@@ -16,5 +16,17 @@ class Draft(Base):
     coach_id: Mapped[int | None] = mapped_column(ForeignKey("coaches.id"))
 
     user: Mapped["User"] = relationship("User", back_populates="draft_entries")  # noqa: F821
-    player: Mapped["Player | None"] = relationship("Player", back_populates="draft_entries")  # noqa: F821
-    coach: Mapped["Coach | None"] = relationship("Coach", back_populates="draft_entries")  # noqa: F821
+    player: Mapped["Player | None"] = relationship(  # noqa: F821
+        "Player",
+        primaryjoin="and_(Draft.player_id == Player.id, Draft.season_id == Player.season_id)",
+        foreign_keys="[Draft.player_id, Draft.season_id]",
+        back_populates="draft_entries",
+        overlaps="coach",
+    )
+    coach: Mapped["Coach | None"] = relationship(  # noqa: F821
+        "Coach",
+        primaryjoin="and_(Draft.coach_id == Coach.id, Draft.season_id == Coach.season_id)",
+        foreign_keys="[Draft.coach_id, Draft.season_id]",
+        back_populates="draft_entries",
+        overlaps="player",
+    )

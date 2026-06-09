@@ -92,7 +92,7 @@ async def sync_teams(session: AsyncSession) -> None:
     logger.info("Syncing teams, players, and coaches for season %s...", season.name)
     raw = await client.get_paginated(
         "football", "teams", "seasons", season.sm_season_id,
-        params={"include": "players.player;coaches", "per_page": 50},
+        params={"include": "players.player;coaches"},
     )
 
     team_rows: list[dict] = []
@@ -142,8 +142,8 @@ async def sync_teams(session: AsyncSession) -> None:
     player_rows = [r for r in player_rows if r.get("id")]
 
     await _upsert(session, Team, team_rows)
-    await _upsert(session, Player, player_rows)
-    await _upsert(session, Coach, coach_rows)
+    await _upsert_composite(session, Player, player_rows, ["id", "season_id"])
+    await _upsert_composite(session, Coach, coach_rows, ["id", "season_id"])
     logger.info(
         "Synced %d teams, %d players, %d coaches",
         len(team_rows), len(player_rows), len(coach_rows),

@@ -69,10 +69,13 @@ async def get_player_score_events(player_id: int, session: AsyncSession = Depend
 
 
 @router.get("/players/{player_id}", response_model=PlayerResponse)
-async def get_player(player_id: int, session: AsyncSession = Depends(get_db)):
+async def get_player(player_id: int, season_id: int | None = Query(None), session: AsyncSession = Depends(get_db)):
+    if season_id is None:
+        season_id = await _get_active_season_id(session)
     result = await session.execute(
         select(Player)
         .where(Player.id == player_id)
+        .where(Player.season_id == season_id)
         .options(selectinload(Player.team), selectinload(Player.position))
     )
     p = result.scalar_one_or_none()
