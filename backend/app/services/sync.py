@@ -251,8 +251,26 @@ async def sync_lineups(session: AsyncSession) -> None:
     if not active_ids:
         return
 
+    await _sync_lineups_for_fixtures(session, active_ids)
+
+
+async def sync_all_lineups(session: AsyncSession) -> None:
+    """Sync lineups for ALL fixtures of the active season regardless of state."""
+    season = await _get_active_season(session)
+    logger.info("Syncing lineups for all fixtures of season %s...", season.name)
+    result = await session.execute(
+        select(Fixture.id).where(Fixture.season_id == season.id)
+    )
+    all_ids = list(result.scalars().all())
+    if not all_ids:
+        logger.info("No fixtures found for active season")
+        return
+    await _sync_lineups_for_fixtures(session, all_ids)
+
+
+async def _sync_lineups_for_fixtures(session: AsyncSession, fixture_ids: list[int]) -> None:
     lineup_rows: list[dict] = []
-    for fixture_id in active_ids:
+    for fixture_id in fixture_ids:
         raw = await client.get(
             "football", "fixtures", fixture_id,
             params={"include": "lineups"},
@@ -268,7 +286,8 @@ async def sync_lineups(session: AsyncSession) -> None:
             })
 
     await _upsert(session, Lineup, lineup_rows)
-    logger.info("Synced %d lineup entries", len(lineup_rows))
+    await session.commit()
+    logger.info("Synced %d lineup entries across %d fixtures", len(lineup_rows), len(fixture_ids))
 
 
 # ---------------------------------------------------------------------------
@@ -338,6 +357,7 @@ SYNC_TARGETS = {
     "events": sync_events,
     "all_events": sync_all_events,
     "lineups": sync_lineups,
+    "all_lineups": sync_all_lineups,
 }
 
 

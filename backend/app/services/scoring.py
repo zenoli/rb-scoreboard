@@ -44,6 +44,7 @@ class UserScore:
     yellow_cards: float = 0.0
     red_cards: float = 0.0
     clean_sheets: float = 0.0
+    volatile_clean_sheets: float = 0.0
     coach_winner: float = 0.0
 
     @property
@@ -54,6 +55,7 @@ class UserScore:
             + self.yellow_cards
             + self.red_cards
             + self.clean_sheets
+            + self.volatile_clean_sheets
             + self.coach_winner
         )
 
@@ -191,6 +193,7 @@ async def _apply_clean_sheets(
         if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
             continue
 
+        is_live = fixture.state == "LIVE"
         goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
         fixture_team_ids = {p.team_id for p in fixture.participants}
 
@@ -204,7 +207,10 @@ async def _apply_clean_sheets(
                 if not _keeper_played(pid, starter_ids, sub_on, sub_off):
                     continue
                 if goals_conceded.get(keeper_team_id, 0) == 0:
-                    user_scores[uid].clean_sheets += weights["clean_sheet"]
+                    if is_live:
+                        user_scores[uid].volatile_clean_sheets += weights["clean_sheet"]
+                    else:
+                        user_scores[uid].clean_sheets += weights["clean_sheet"]
 
 
 def _find_keeper_team(
@@ -233,7 +239,7 @@ def _keeper_played(
         return subbed_off_at > 1
 
     if came_on:
-        return sub_on_events[player_id] <= 89
+        return sub_on_events[player_id] <= 120
 
     return False
 
@@ -500,6 +506,7 @@ async def _per_player_clean_sheets(
             if not _keeper_played(pid, starter_ids, sub_on, sub_off):
                 continue
             if goals_conceded.get(keeper_team, 0) == 0:
+                # Volatile (LIVE) clean sheets still count toward per-player points display
                 cs[pid] = cs.get(pid, 0.0) + weights["clean_sheet"]
     return cs
 
@@ -512,19 +519,29 @@ def _parse_fixture_events(
     sub_on: dict[int, int] = {}
     sub_off: dict[int, int] = {}
 
+    # Build player→team lookup from lineups (fallback for events missing team_id)
+    player_team: dict[int, int] = {}
     for lu in fixture.lineups:
         if lu.player_id:
             starter_ids[lu.player_id] = lu.type_id or 0
+            if lu.team_id:
+                player_team[lu.player_id] = lu.team_id
 
     for event in fixture.events:
         if not event.event_type:
             continue
         dev = (event.event_type.developer_name or "").upper()
         if dev in _GOAL_TYPES and event.period_id != PENALTY_SHOOTOUT_PERIOD:
-            if event.team_id:
+            scoring_team = event.team_id or (player_team.get(event.player_id) if event.player_id else None)
+            if scoring_team:
                 for p in fixture.participants:
-                    if p.team_id != event.team_id:
+                    if p.team_id != scoring_team:
                         goals_conceded[p.team_id] = goals_conceded.get(p.team_id, 0) + 1
+        elif dev == "OWNGOAL" and event.period_id != PENALTY_SHOOTOUT_PERIOD:
+            # Own goal: the scorer's team concedes
+            own_goal_team = event.team_id or (player_team.get(event.player_id) if event.player_id else None)
+            if own_goal_team:
+                goals_conceded[own_goal_team] = goals_conceded.get(own_goal_team, 0) + 1
         elif dev == "SUBSTITUTION":
             if event.player_id:
                 sub_on[event.player_id] = event.minute or 0
@@ -552,6 +569,7 @@ class ScoreEvent:
     minute: int | None
     points: float
     fixture_name: str | None
+    is_volatile: bool = False
 
 
 async def compute_user_score_events(session: AsyncSession, user_id: int) -> list[ScoreEvent]:
@@ -798,6 +816,7 @@ async def _clean_sheet_events(
     for fixture in fixtures_result.scalars().all():
         if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
             continue
+        is_live = fixture.state == "LIVE"
         goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
         fixture_team_ids = {p.team_id for p in fixture.participants}
         for pid in gk_ids:
@@ -822,6 +841,7 @@ async def _clean_sheet_events(
                         minute=None,
                         points=weights["clean_sheet"],
                         fixture_name=fixture.name,
+                        is_volatile=is_live,
                     )
                 )
     return cs_events

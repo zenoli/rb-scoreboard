@@ -67,7 +67,7 @@ function EventCard({ ev, meta }: { ev: ScoreEvent; meta: CategoryMeta }) {
   const badgeVariant = bookingBadge?.variant ?? meta.badgeVariant
   const badgeLabel = bookingBadge?.label ?? meta.label
   return (
-    <div className="flex items-center gap-3 rounded-lg border p-3 bg-card">
+    <div className={`flex items-center gap-3 rounded-lg border p-3 bg-card${ev.is_volatile ? ' opacity-60' : ''}`}>
       <PlayerIcon
         imagePath={ev.player_image_path}
         name={ev.player_name}
@@ -90,6 +90,7 @@ function EventCard({ ev, meta }: { ev: ScoreEvent; meta: CategoryMeta }) {
         <Badge variant={badgeVariant} className="text-xs flex items-center gap-1">
           <Icon size={12} />
           {badgeLabel}
+          {ev.is_volatile && <span className="ml-1 italic">(live)</span>}
         </Badge>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">
           {ev.minute != null && <span>{ev.minute}&apos;</span>}

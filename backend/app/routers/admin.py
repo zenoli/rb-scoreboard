@@ -23,7 +23,7 @@ router = APIRouter(dependencies=[Depends(require_admin_key)])
 # Sync
 # ---------------------------------------------------------------------------
 
-VALID_SYNC_TARGETS = ("event_types", "teams", "fixtures", "events", "all_events", "lineups")
+VALID_SYNC_TARGETS = ("event_types", "teams", "fixtures", "events", "all_events", "lineups", "all_lineups")
 
 
 @router.post("/sync/{target}")

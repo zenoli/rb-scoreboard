@@ -7,6 +7,7 @@ export interface UserScore {
   yellow_cards: number
   red_cards: number
   clean_sheets: number
+  volatile_clean_sheets: number
   coach_winner: number
   total: number
 }
@@ -35,6 +36,7 @@ export interface ScoreEvent {
   minute: number | null
   points: number
   fixture_name: string | null
+  is_volatile: boolean
 }
 
 export interface PlayerBrief {

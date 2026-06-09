@@ -117,7 +117,18 @@ const columnDefs: ColumnDef<Row>[] = [
   {
     accessorKey: 'clean_sheets',
     header: ({ column }) => <ColHeader name="Cl. Sht" icon={Shield} column={column} />,
-    cell: ({ column, getValue }) => <ScoreCell column={column} value={getValue<number>()} />,
+    cell: ({ column, row }) => {
+      const verified = row.original.clean_sheets
+      const volatile = row.original.volatile_clean_sheets
+      const isSorted = column.getIsSorted() === 'desc'
+      return (
+        <div className="text-center font-medium">
+          <Badge variant="secondary" className={clsx({ 'bg-transparent': !isSorted })}>
+            {fmt(verified)}{volatile > 0 && <span className="text-muted-foreground ml-1">(+{fmt(volatile)})</span>}
+          </Badge>
+        </div>
+      )
+    },
   },
   {
     accessorKey: 'total',

@@ -25,6 +25,7 @@ class UserScoreResponse(BaseModel):
     yellow_cards: float
     red_cards: float
     clean_sheets: float
+    volatile_clean_sheets: float
     coach_winner: float
     total: float
 
@@ -57,6 +58,7 @@ class ScoreEventResponse(BaseModel):
     minute: int | None
     points: float
     fixture_name: str | None
+    is_volatile: bool
 
 
 @router.get("/scores/history", response_model=ScoreHistoryResponse)
@@ -96,6 +98,7 @@ async def get_scores(session: AsyncSession = Depends(get_db)):
                 yellow_cards=s.yellow_cards,
                 red_cards=s.red_cards,
                 clean_sheets=s.clean_sheets,
+                volatile_clean_sheets=s.volatile_clean_sheets,
                 coach_winner=s.coach_winner,
                 total=s.total,
             )

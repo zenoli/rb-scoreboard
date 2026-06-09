@@ -54,6 +54,7 @@ class ScoreEventResponse(BaseModel):
     minute: int | None
     points: float
     fixture_name: str | None
+    is_volatile: bool
 
 
 async def _get_active_season_id(session: AsyncSession) -> int | None:
