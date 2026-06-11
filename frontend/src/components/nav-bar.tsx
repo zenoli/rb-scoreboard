@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Volleyball, Menu } from 'lucide-react'
+import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   Drawer,
@@ -11,6 +11,13 @@ import {
   DrawerTitle,
 } from '@/components/ui/drawer'
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
+
+const navItems = [
+  { href: '/scoreboard', label: 'Scoreboard', icon: Trophy },
+  { href: '/players', label: 'Players', icon: Users },
+  { href: '/drafts', label: 'Drafts', icon: ClipboardList },
+  { href: '/admin', label: 'Admin', icon: Settings },
+]
 
 export function NavBar() {
   return (
@@ -26,15 +33,12 @@ export function NavBar() {
 
         {/* Desktop nav */}
         <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
-          <Link href="/players" className="hover:text-primary transition-colors">
-            Players
-          </Link>
-          <Link href="/drafts" className="hover:text-primary transition-colors">
-            Drafts
-          </Link>
-          <Link href="/admin" className="hover:text-primary transition-colors">
-            Admin
-          </Link>
+          {navItems.map(({ href, label, icon: Icon }) => (
+            <Link key={href} href={href} className="flex items-center gap-1.5 hover:text-primary transition-colors">
+              <Icon size={15} />
+              {label}
+            </Link>
+          ))}
           <ThemeToggle />
         </div>
 
@@ -51,35 +55,30 @@ export function NavBar() {
             </DrawerTrigger>
             <DrawerContent className="px-4 pb-6 pt-4" aria-describedby={undefined}>
               <VisuallyHidden><DrawerTitle>Navigation menu</DrawerTitle></VisuallyHidden>
-              <nav className="flex flex-col gap-1 text-base font-medium mt-2">
-                <DrawerClose asChild>
-                  <Link
-                    href="/players"
-                    className="px-2 py-3 rounded-md hover:bg-accent transition-colors"
-                  >
-                    Players
-                  </Link>
-                </DrawerClose>
-                <DrawerClose asChild>
-                  <Link
-                    href="/drafts"
-                    className="px-2 py-3 rounded-md hover:bg-accent transition-colors"
-                  >
-                    Drafts
-                  </Link>
-                </DrawerClose>
-                <DrawerClose asChild>
-                  <Link
-                    href="/admin"
-                    className="px-2 py-3 rounded-md hover:bg-accent transition-colors"
-                  >
-                    Admin
-                  </Link>
-                </DrawerClose>
-                <div className="flex items-center justify-between px-2 py-3">
-                  <span className="text-muted-foreground">Theme</span>
+              <nav className="flex flex-col gap-1 text-base font-medium">
+                <div className="flex items-center justify-between">
+                  <DrawerClose asChild>
+                    <Link
+                      href="/scoreboard"
+                      className="flex items-center gap-3 px-2 py-3 rounded-md hover:bg-accent transition-colors flex-1"
+                    >
+                      <Trophy size={18} />
+                      Scoreboard
+                    </Link>
+                  </DrawerClose>
                   <ThemeToggle />
                 </div>
+                {navItems.slice(1).map(({ href, label, icon: Icon }) => (
+                  <DrawerClose key={href} asChild>
+                    <Link
+                      href={href}
+                      className="flex items-center gap-3 px-2 py-3 rounded-md hover:bg-accent transition-colors"
+                    >
+                      <Icon size={18} />
+                      {label}
+                    </Link>
+                  </DrawerClose>
+                ))}
               </nav>
             </DrawerContent>
           </Drawer>
