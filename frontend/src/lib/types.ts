@@ -134,6 +134,7 @@ export interface LiveScoreEvent {
 
 export interface LiveResponse {
   is_live: boolean
+  next_kickoff: string | null
   players: LivePlayer[]
   events: LiveScoreEvent[]
 }

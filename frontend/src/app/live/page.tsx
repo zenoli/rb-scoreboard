@@ -14,7 +14,30 @@ import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { LivePlayer, LiveResponse, LiveScoreEvent } from '@/lib/types'
 
-const POLL_INTERVAL = 30_000
+const POLL_INTERVAL = Number(process.env.NEXT_PUBLIC_LIVE_POLL_INTERVAL ?? 10_000)
+
+// How many ms before/after the match window to poll
+const PRE_MATCH_MARGIN = 30 * 60 * 1000
+// 90 min play + 15 min HT + ~10 min stoppage + 30 min ET + 5 min ET HT
+// + ~5 min ET stoppage + ~30 min penalties + 30 min post-match margin
+const POST_MATCH_WINDOW = (90 + 15 + 10 + 30 + 5 + 5 + 30 + 30) * 60 * 1000
+
+function msUntilNextPoll(data: { is_live: boolean; next_kickoff: string | null }): number {
+  if (data.is_live) return POLL_INTERVAL
+
+  if (data.next_kickoff) {
+    const kickoff = new Date(data.next_kickoff).getTime()
+    const now = Date.now()
+    const windowStart = kickoff - PRE_MATCH_MARGIN
+    const windowEnd = kickoff + POST_MATCH_WINDOW
+
+    if (now >= windowStart && now <= windowEnd) return POLL_INTERVAL
+    if (now < windowStart) return windowStart - now
+  }
+
+  // No upcoming fixture in window — check again in 5 min
+  return 5 * 60 * 1000
+}
 
 // ---------------------------------------------------------------------------
 // Pitch
@@ -197,14 +220,21 @@ export default function LivePage() {
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    function load() {
-      api.live()
-        .then((d: LiveResponse) => setData(d))
-        .catch((e: Error) => setError(e.message))
+    let timeout: ReturnType<typeof setTimeout>
+
+    async function load() {
+      try {
+        const d: LiveResponse = await api.live()
+        setData(d)
+        timeout = setTimeout(load, msUntilNextPoll(d))
+      } catch (e) {
+        setError((e as Error).message)
+        timeout = setTimeout(load, POLL_INTERVAL)
+      }
     }
+
     load()
-    const interval = setInterval(load, POLL_INTERVAL)
-    return () => clearInterval(interval)
+    return () => clearTimeout(timeout)
   }, [])
 
   if (error) return <div className="max-w-2xl mx-auto px-4 py-8 text-destructive">{error}</div>

@@ -35,6 +35,7 @@ class LiveScoreEventResponse(BaseModel):
 
 class LiveResponse(BaseModel):
     is_live: bool
+    next_kickoff: str | None
     players: list[LivePlayerResponse]
     events: list[LiveScoreEventResponse]
 
@@ -44,6 +45,7 @@ async def get_live(session: AsyncSession = Depends(get_db)):
     data: LiveData = await compute_live_data(session)
     return LiveResponse(
         is_live=data.is_live,
+        next_kickoff=data.next_kickoff.isoformat() if data.next_kickoff else None,
         players=[LivePlayerResponse(**p.__dict__) for p in data.players],
         events=[LiveScoreEventResponse(**e.__dict__) for e in data.events],
     )

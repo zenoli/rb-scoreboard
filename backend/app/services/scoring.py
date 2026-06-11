@@ -2,7 +2,7 @@
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, datetime
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -941,6 +941,7 @@ class LiveScoreEvent:
 @dataclass
 class LiveData:
     is_live: bool
+    next_kickoff: datetime | None = None
     players: list[LivePlayer] = field(default_factory=list)
     events: list[LiveScoreEvent] = field(default_factory=list)
 
@@ -951,6 +952,18 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
         return LiveData(is_live=False)
 
     weights = await _load_weights(session, season.id)
+
+    # Next scheduled (NS) fixture for active season
+    next_kickoff_result = await session.execute(
+        select(Fixture.starting_at)
+        .where(Fixture.season_id == season.id)
+        .where(Fixture.state == "NS")
+        .where(Fixture.starting_at.isnot(None))
+        .where(Fixture.starting_at > datetime.utcnow())
+        .order_by(Fixture.starting_at)
+        .limit(1)
+    )
+    next_kickoff: datetime | None = next_kickoff_result.scalar_one_or_none()
 
     # Load LIVE fixtures with all needed relations
     live_result = await session.execute(
@@ -966,7 +979,7 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
     live_fixtures = list(live_result.scalars().all())
 
     if not live_fixtures:
-        return LiveData(is_live=False)
+        return LiveData(is_live=False, next_kickoff=next_kickoff)
 
     # Collect team IDs participating in live fixtures
     live_team_ids: set[int] = set()
@@ -1002,7 +1015,7 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
             player_obj[pid] = entry.player
 
     if not live_player_ids:
-        return LiveData(is_live=True)
+        return LiveData(is_live=True, next_kickoff=next_kickoff)
 
     # Compute points from live fixtures only
     live_player_points: dict[int, float] = {pid: 0.0 for pid in live_player_ids}
@@ -1155,4 +1168,4 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
     # Sort events: most recent minute first, None (clean sheets) last
     live_events.sort(key=lambda e: (e.minute is None, -(e.minute or 0)))
 
-    return LiveData(is_live=True, players=result_players, events=live_events)
+    return LiveData(is_live=True, next_kickoff=next_kickoff, players=result_players, events=live_events)
