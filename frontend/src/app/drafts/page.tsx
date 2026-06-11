@@ -1,28 +1,24 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
+import { useEffect, useRef, useState } from 'react'
+import { motion, type PanInfo } from 'framer-motion'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { FootballPitch } from '@/components/football-pitch'
 import { api } from '@/lib/api'
 import type { PlayerPoints, UserDraft } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-const slideVariants = {
-  enter: (direction: number) => ({ x: direction > 0 ? '100%' : '-100%', opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (direction: number) => ({ x: direction > 0 ? '-100%' : '100%', opacity: 0 }),
-}
-
-const transition = { type: 'spring' as const, stiffness: 320, damping: 32 }
+const SPRING = { type: 'spring' as const, stiffness: 320, damping: 32 }
+const SWIPE_VELOCITY_THRESHOLD = 300
+const SWIPE_DISTANCE_RATIO = 0.2
 
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<UserDraft[] | null>(null)
   const [pointsByUser, setPointsByUser] = useState<Map<number, Map<number, number>>>(new Map())
   const [error, setError] = useState<string | null>(null)
   const [activeIndex, setActiveIndex] = useState(0)
-  const [direction, setDirection] = useState(0)
-  const [touchStartX, setTouchStartX] = useState<number | null>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     api.drafts()
@@ -45,24 +41,28 @@ export default function DraftsPage() {
       .catch((e) => setError(e.message))
   }, [])
 
+  useEffect(() => {
+    const el = containerRef.current
+    if (!el) return
+    setContainerWidth(el.offsetWidth)
+    const observer = new ResizeObserver(([entry]) => setContainerWidth(entry.contentRect.width))
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [drafts])
+
   function goTo(index: number) {
-    if (!drafts || index === activeIndex || index < 0 || index >= drafts.length) return
-    setDirection(index > activeIndex ? 1 : -1)
-    setActiveIndex(index)
+    if (!drafts) return
+    setActiveIndex(Math.max(0, Math.min(drafts.length - 1, index)))
   }
 
-  function handleTouchStart(e: React.TouchEvent) {
-    setTouchStartX(e.touches[0].clientX)
-  }
-
-  function handleTouchEnd(e: React.TouchEvent) {
-    if (touchStartX === null || !drafts) return
-    const delta = touchStartX - e.changedTouches[0].clientX
-    if (Math.abs(delta) > 50) {
-      if (delta > 0) goTo(activeIndex + 1)
-      else goTo(activeIndex - 1)
+  function handleDragEnd(_: unknown, { offset, velocity }: PanInfo) {
+    if (!drafts || containerWidth === 0) return
+    if (velocity.x < -SWIPE_VELOCITY_THRESHOLD || offset.x < -containerWidth * SWIPE_DISTANCE_RATIO) {
+      goTo(activeIndex + 1)
+    } else if (velocity.x > SWIPE_VELOCITY_THRESHOLD || offset.x > containerWidth * SWIPE_DISTANCE_RATIO) {
+      goTo(activeIndex - 1)
     }
-    setTouchStartX(null)
+    // threshold not met → animate snaps back automatically (animate target unchanged)
   }
 
   if (error) return <div className="max-w-2xl mx-auto px-4 py-8 text-destructive">{error}</div>
@@ -79,9 +79,6 @@ export default function DraftsPage() {
   if (drafts.length === 0) {
     return <div className="max-w-2xl mx-auto px-4 py-8 text-center text-muted-foreground">No drafts yet.</div>
   }
-
-  const draft = drafts[activeIndex]
-  const pts = pointsByUser.get(draft.user_id) ?? new Map()
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -107,41 +104,47 @@ export default function DraftsPage() {
         </div>
       </div>
 
-      {/* Carousel */}
-      <div
-        className="relative overflow-hidden"
-        onTouchStart={handleTouchStart}
-        onTouchEnd={handleTouchEnd}
-      >
-        <AnimatePresence initial={false} custom={direction} mode="popLayout">
-          <motion.div
-            key={draft.user_id}
-            custom={direction}
-            variants={slideVariants}
-            initial="enter"
-            animate="center"
-            exit="exit"
-            transition={transition}
-          >
-            <FootballPitch draft={draft} pointsMap={pts} />
-            {draft.coach && (
-              <div className="mt-4 flex items-center gap-3 rounded-lg border p-3 bg-card max-w-sm mx-auto">
-                <PlayerIcon
-                  imagePath={draft.coach.image_path}
-                  name={draft.coach.display_name}
-                  teamImagePath={draft.coach.team_image_path}
-                  size={48}
-                  avatarClassName="ring-2 ring-white shadow-md"
-                />
-                <div>
-                  <div className="text-xs text-muted-foreground">Coach</div>
-                  <div className="font-medium text-sm">{draft.coach.display_name}</div>
-                  <div className="text-xs text-muted-foreground">{draft.coach.team_name}</div>
-                </div>
+      {/* Carousel track */}
+      <div ref={containerRef} className="overflow-hidden">
+        <motion.div
+          className="flex"
+          style={{ width: `${drafts.length * 100}%` }}
+          animate={{ x: containerWidth ? -activeIndex * containerWidth : 0 }}
+          transition={SPRING}
+          drag="x"
+          dragConstraints={{
+            left: containerWidth ? -(drafts.length - 1) * containerWidth : 0,
+            right: 0,
+          }}
+          dragElastic={0.1}
+          dragMomentum={false}
+          onDragEnd={handleDragEnd}
+        >
+          {drafts.map((d) => {
+            const pts = pointsByUser.get(d.user_id) ?? new Map()
+            return (
+              <div key={d.user_id} style={{ width: `${100 / drafts.length}%` }} className="shrink-0">
+                <FootballPitch draft={d} pointsMap={pts} />
+                {d.coach && (
+                  <div className="mt-4 flex items-center gap-3 rounded-lg border p-3 bg-card max-w-sm mx-auto">
+                    <PlayerIcon
+                      imagePath={d.coach.image_path}
+                      name={d.coach.display_name}
+                      teamImagePath={d.coach.team_image_path}
+                      size={48}
+                      avatarClassName="ring-2 ring-white shadow-md"
+                    />
+                    <div>
+                      <div className="text-xs text-muted-foreground">Coach</div>
+                      <div className="font-medium text-sm">{d.coach.display_name}</div>
+                      <div className="text-xs text-muted-foreground">{d.coach.team_name}</div>
+                    </div>
+                  </div>
+                )}
               </div>
-            )}
-          </motion.div>
-        </AnimatePresence>
+            )
+          })}
+        </motion.div>
       </div>
 
       {/* Dot indicators */}
