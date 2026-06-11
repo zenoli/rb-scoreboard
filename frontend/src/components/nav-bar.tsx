@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings, Radio } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
+import { useLiveStatus } from '@/components/live-status-provider'
 import {
   Drawer,
   DrawerTrigger,
@@ -21,6 +22,8 @@ const navItems = [
 ]
 
 export function NavBar() {
+  const isLive = useLiveStatus()
+
   return (
     <header className="border-b sticky top-0 z-50 bg-background/95 backdrop-blur">
       <nav className="max-w-5xl mx-auto px-4 h-14 flex items-center justify-between">
@@ -36,15 +39,14 @@ export function NavBar() {
         <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
           {navItems.map(({ href, label, icon: Icon, live }) => (
             <Link key={href} href={href} className="flex items-center gap-1.5 hover:text-primary transition-colors">
-              {live ? (
-                <span className="relative flex items-center">
-                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-red-500 opacity-75" />
-                  <Icon size={15} className="relative" />
-                </span>
-              ) : (
-                <Icon size={15} />
-              )}
+              <Icon size={15} />
               {label}
+              {live && isLive && (
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                </span>
+              )}
             </Link>
           ))}
           <ThemeToggle />
@@ -71,11 +73,14 @@ export function NavBar() {
                       href="/live"
                       className="flex items-center gap-3 px-2 py-3 rounded-md hover:bg-accent transition-colors flex-1"
                     >
-                      <span className="relative flex items-center">
-                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-red-500 opacity-75" />
-                        <Radio size={18} className="relative" />
-                      </span>
+                      <Radio size={18} />
                       Live
+                      {isLive && (
+                        <span className="relative flex h-2 w-2">
+                          <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
+                          <span className="relative inline-flex h-2 w-2 rounded-full bg-red-500" />
+                        </span>
+                      )}
                     </Link>
                   </DrawerClose>
                   <ThemeToggle />

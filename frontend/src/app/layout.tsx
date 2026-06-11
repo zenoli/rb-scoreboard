@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import localFont from 'next/font/local'
 import { NavBar } from '@/components/nav-bar'
+import { LiveStatusProvider } from '@/components/live-status-provider'
 import './globals.css'
 
 const GeistSans = localFont({
@@ -44,8 +45,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
-        <NavBar />
-        <main className="flex-1">{children}</main>
+        <LiveStatusProvider>
+          <NavBar />
+          <main className="flex-1">{children}</main>
+        </LiveStatusProvider>
       </body>
     </html>
   )
