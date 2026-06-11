@@ -28,7 +28,7 @@ export function NavBar() {
           className="flex items-center gap-2 font-semibold text-base tracking-tight"
         >
           <Volleyball size={18} />
-          RB Scoreboard - 2026
+          RB Scoreboard
         </Link>
 
         {/* Desktop nav */}
@@ -43,7 +43,8 @@ export function NavBar() {
         </div>
 
         {/* Mobile hamburger */}
-        <div className="sm:hidden">
+        <div className="sm:hidden flex items-center gap-1">
+          <ThemeToggle />
           <Drawer direction="top">
             <DrawerTrigger asChild>
               <button

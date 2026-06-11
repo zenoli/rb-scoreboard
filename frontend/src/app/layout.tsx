@@ -29,8 +29,8 @@ const GeistMono = localFont({
 
 
 export const metadata: Metadata = {
-  title: 'RB Scoreboard — WC 2026',
-  description: 'Fantasy football scoreboard for World Cup 2026',
+  title: 'RB Scoreboard',
+  description: 'Fantasy football scoreboard for World Cups',
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
