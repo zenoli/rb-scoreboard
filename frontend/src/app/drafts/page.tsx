@@ -8,9 +8,8 @@ import { api } from '@/lib/api'
 import type { PlayerPoints, UserDraft } from '@/lib/types'
 import { cn } from '@/lib/utils'
 
-const SPRING = { type: 'spring' as const, stiffness: 320, damping: 32 }
+const SPRING = { type: 'spring' as const, stiffness: 500, damping: 40 }
 const SWIPE_VELOCITY_THRESHOLD = 300
-const SWIPE_DISTANCE_RATIO = 0.2
 
 export default function DraftsPage() {
   const [drafts, setDrafts] = useState<UserDraft[] | null>(null)
@@ -57,12 +56,16 @@ export default function DraftsPage() {
 
   function handleDragEnd(_: unknown, { offset, velocity }: PanInfo) {
     if (!drafts || containerWidth === 0) return
-    if (velocity.x < -SWIPE_VELOCITY_THRESHOLD || offset.x < -containerWidth * SWIPE_DISTANCE_RATIO) {
-      goTo(activeIndex + 1)
-    } else if (velocity.x > SWIPE_VELOCITY_THRESHOLD || offset.x > containerWidth * SWIPE_DISTANCE_RATIO) {
-      goTo(activeIndex - 1)
+    let newIndex: number
+    if (velocity.x < -SWIPE_VELOCITY_THRESHOLD) {
+      newIndex = activeIndex + 1
+    } else if (velocity.x > SWIPE_VELOCITY_THRESHOLD) {
+      newIndex = activeIndex - 1
+    } else {
+      // snap to nearest based on drag position
+      newIndex = Math.round(activeIndex - offset.x / containerWidth)
     }
-    // threshold not met → animate snaps back automatically (animate target unchanged)
+    goTo(newIndex)
   }
 
   if (error) return <div className="max-w-2xl mx-auto px-4 py-8 text-destructive">{error}</div>
@@ -124,23 +127,25 @@ export default function DraftsPage() {
             const pts = pointsByUser.get(d.user_id) ?? new Map()
             return (
               <div key={d.user_id} style={{ width: `${100 / drafts.length}%` }} className="shrink-0">
-                <FootballPitch draft={d} pointsMap={pts} />
-                {d.coach && (
-                  <div className="mt-4 flex items-center gap-3 rounded-lg border p-3 bg-card max-w-sm mx-auto">
-                    <PlayerIcon
-                      imagePath={d.coach.image_path}
-                      name={d.coach.display_name}
-                      teamImagePath={d.coach.team_image_path}
-                      size={48}
-                      avatarClassName="ring-2 ring-white shadow-md"
-                    />
-                    <div>
-                      <div className="text-xs text-muted-foreground">Coach</div>
-                      <div className="font-medium text-sm">{d.coach.display_name}</div>
-                      <div className="text-xs text-muted-foreground">{d.coach.team_name}</div>
+                <div className="px-2">
+                  <FootballPitch draft={d} pointsMap={pts} />
+                  {d.coach && (
+                    <div className="mt-4 flex items-center gap-3 rounded-lg border p-3 bg-card max-w-sm mx-auto">
+                      <PlayerIcon
+                        imagePath={d.coach.image_path}
+                        name={d.coach.display_name}
+                        teamImagePath={d.coach.team_image_path}
+                        size={48}
+                        avatarClassName="ring-2 ring-white shadow-md"
+                      />
+                      <div>
+                        <div className="text-xs text-muted-foreground">Coach</div>
+                        <div className="font-medium text-sm">{d.coach.display_name}</div>
+                        <div className="text-xs text-muted-foreground">{d.coach.team_name}</div>
+                      </div>
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )
           })}
