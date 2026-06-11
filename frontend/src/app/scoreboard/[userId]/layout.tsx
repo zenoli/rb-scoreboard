@@ -48,6 +48,7 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
       <div className="flex rounded-lg border p-1 bg-muted mb-6">
         <Link
           href={`/scoreboard/${userId}/score-events`}
+          replace
           className={cn(
             'flex-1 text-center text-sm py-1.5 px-3 rounded-md transition-colors',
             isScoreEvents
@@ -59,6 +60,7 @@ export default function UserLayout({ children }: { children: React.ReactNode }) 
         </Link>
         <Link
           href={`/scoreboard/${userId}/draft`}
+          replace
           className={cn(
             'flex-1 text-center text-sm py-1.5 px-3 rounded-md transition-colors',
             isDraft
