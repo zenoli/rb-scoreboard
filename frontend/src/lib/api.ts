@@ -60,11 +60,12 @@ export const api = {
   playerEvents: (playerId: number) => get(`/api/players/${playerId}/events`),
   drafts: () => get('/api/drafts'),
   draftPoints: (userId: number) => get(`/api/drafts/${userId}/points`),
-  players: (params?: { position_category?: string; team_id?: number; season_id?: number }) => {
+  players: (params?: { position_category?: string; team_id?: number; season_id?: number; include_points?: boolean }) => {
     const qs = new URLSearchParams()
     if (params?.position_category) qs.set('position_category', params.position_category)
     if (params?.team_id) qs.set('team_id', String(params.team_id))
     if (params?.season_id) qs.set('season_id', String(params.season_id))
+    if (params?.include_points) qs.set('include_points', 'true')
     return get(`/api/players${qs.toString() ? '?' + qs.toString() : ''}`)
   },
   coaches: (params?: { season_id?: number }) => {

@@ -82,6 +82,8 @@ export interface PlayerResponse {
   position_id: number | null
   position_name: string | null
   position_category: string | null
+  total_points?: number | null
+  drafted_by_username?: string | null
 }
 
 export interface CoachResponse {

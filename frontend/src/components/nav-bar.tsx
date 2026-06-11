@@ -26,6 +26,9 @@ export function NavBar() {
 
         {/* Desktop nav */}
         <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
+          <Link href="/players" className="hover:text-primary transition-colors">
+            Players
+          </Link>
           <Link href="/drafts" className="hover:text-primary transition-colors">
             Drafts
           </Link>
@@ -49,6 +52,14 @@ export function NavBar() {
             <DrawerContent className="px-4 pb-6 pt-4" aria-describedby={undefined}>
               <VisuallyHidden><DrawerTitle>Navigation menu</DrawerTitle></VisuallyHidden>
               <nav className="flex flex-col gap-1 text-base font-medium mt-2">
+                <DrawerClose asChild>
+                  <Link
+                    href="/players"
+                    className="px-2 py-3 rounded-md hover:bg-accent transition-colors"
+                  >
+                    Players
+                  </Link>
+                </DrawerClose>
                 <DrawerClose asChild>
                   <Link
                     href="/drafts"

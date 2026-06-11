@@ -481,6 +481,56 @@ async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int
     return player_points
 
 
+async def compute_all_player_points(session: AsyncSession) -> dict[int, float]:
+    """Returns player_id → total points for ALL players in the active season (one pass)."""
+    season = await _get_active_season(session)
+    if season is None:
+        return {}
+
+    weights = await _load_weights(session, season.id)
+
+    events_result = await session.execute(
+        select(Event)
+        .join(Fixture, Event.fixture_id == Fixture.id)
+        .where(Fixture.season_id == season.id)
+        .options(selectinload(Event.event_type))
+    )
+
+    player_points: dict[int, float] = defaultdict(float)
+
+    for event in events_result.scalars().all():
+        if not event.event_type:
+            continue
+        dev = (event.event_type.developer_name or "").upper()
+        pid = event.player_id
+        if pid is not None:
+            if dev in _GOAL_TYPES:
+                player_points[pid] += weights["goal"]
+            elif dev in _ASSIST_TYPES:
+                player_points[pid] += weights["assist"]
+            elif dev in _YELLOW_TYPES:
+                player_points[pid] += weights["yellow_card"]
+            elif dev in _RED_TYPES:
+                player_points[pid] += weights["red_card"]
+        if dev in _GOAL_TYPES and event.related_player_id is not None:
+            player_points[event.related_player_id] += weights["assist"]
+
+    # Clean sheets for all GKs in the season
+    gk_result = await session.execute(
+        select(Player)
+        .join(Position, Player.position_id == Position.id)
+        .where(Player.season_id == season.id)
+        .where(Position.category == "GK")
+    )
+    gk_ids = {p.id for p in gk_result.scalars().all()}
+    if gk_ids:
+        cs = await _per_player_clean_sheets(session, season.id, gk_ids, weights)
+        for pid, pts in cs.items():
+            player_points[pid] += pts
+
+    return dict(player_points)
+
+
 async def _per_player_clean_sheets(
     session: AsyncSession, season_id: int, gk_ids: set[int], weights: dict[str, float]
 ) -> dict[int, float]:

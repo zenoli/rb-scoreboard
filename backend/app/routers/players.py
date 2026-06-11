@@ -6,9 +6,11 @@ from sqlalchemy.orm import selectinload
 
 from app.database import get_db
 from app.models.coach import Coach
+from app.models.draft import Draft
 from app.models.player import Player
 from app.models.season import Season
-from app.services.scoring import ScoreEvent, compute_player_score_events
+from app.models.user import User
+from app.services.scoring import ScoreEvent, compute_all_player_points, compute_player_score_events
 
 router = APIRouter()
 
@@ -26,6 +28,8 @@ class PlayerResponse(BaseModel):
     position_id: int | None
     position_name: str | None
     position_category: str | None
+    total_points: float | None = None
+    drafted_by_username: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -103,6 +107,7 @@ async def get_players(
     team_id: int | None = Query(None),
     position_category: str | None = Query(None),
     season_id: int | None = Query(None),
+    include_points: bool = Query(False),
     session: AsyncSession = Depends(get_db),
 ):
     if season_id is None:
@@ -121,6 +126,20 @@ async def get_players(
         stmt = stmt.join(Position).where(Position.category == position_category)
     result = await session.execute(stmt)
     players = result.scalars().all()
+
+    points_map: dict[int, float] = {}
+    draft_map: dict[int, str] = {}
+    if include_points:
+        points_map = await compute_all_player_points(session)
+        if season_id is not None:
+            drafts_result = await session.execute(
+                select(Draft.player_id, User.username)
+                .join(User, Draft.user_id == User.id)
+                .where(Draft.season_id == season_id)
+                .where(Draft.player_id.is_not(None))
+            )
+            draft_map = {row.player_id: row.username for row in drafts_result.all()}
+
     return [
         PlayerResponse(
             id=p.id,
@@ -135,6 +154,8 @@ async def get_players(
             position_id=p.position_id,
             position_name=p.position.name if p.position else None,
             position_category=p.position.category if p.position else None,
+            total_points=points_map.get(p.id),
+            drafted_by_username=draft_map.get(p.id),
         )
         for p in players
     ]
