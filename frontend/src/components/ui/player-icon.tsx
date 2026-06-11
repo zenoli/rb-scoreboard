@@ -7,6 +7,7 @@ interface PlayerIconProps {
   name: string | null
   teamImagePath?: string | null
   points?: number
+  pointsLabel?: string
   size?: number
   avatarClassName?: string
   className?: string
@@ -17,6 +18,7 @@ export function PlayerIcon({
   name,
   teamImagePath,
   points,
+  pointsLabel,
   size = 40,
   avatarClassName = 'ring-1 ring-border shadow-sm',
   className,
@@ -24,7 +26,8 @@ export function PlayerIcon({
   const badgeSize = Math.round(size * 0.38)
   const badgeOffset = Math.round(-badgeSize * 0.28)
   const showFlag = !!teamImagePath
-  const showPoints = typeof points === 'number' && points > 0
+  const resolvedPointsLabel = pointsLabel ?? (typeof points === 'number' && points > 0 ? (points % 1 === 0 ? String(points) : points.toFixed(1)) : null)
+  const showPoints = resolvedPointsLabel !== null
 
   return (
     <div
@@ -67,18 +70,19 @@ export function PlayerIcon({
 
       {showPoints && (
         <div
-          className="absolute rounded-full bg-black text-white font-bold flex items-center justify-center shadow"
+          className="absolute rounded-full bg-black text-white font-bold flex items-center justify-center shadow whitespace-nowrap"
           style={{
-            width: badgeSize,
+            minWidth: badgeSize,
             height: badgeSize,
+            paddingInline: Math.round(badgeSize * 0.2),
             bottom: badgeOffset,
             left: badgeOffset,
             zIndex: 10,
-            fontSize: Math.round(badgeSize * 0.55),
+            fontSize: Math.round(badgeSize * 0.5),
             lineHeight: 1,
           }}
         >
-          {points! % 1 === 0 ? points : points!.toFixed(1)}
+          {resolvedPointsLabel}
         </div>
       )}
     </div>

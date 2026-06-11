@@ -107,6 +107,37 @@ export interface ScoreHistoryResponse {
   series: ScoreHistorySeries[]
 }
 
+export interface LivePlayer {
+  player_id: number
+  display_name: string | null
+  image_path: string | null
+  team_image_path: string | null
+  position_category: string | null
+  drafted_by_username: string
+  total_points: number
+  live_points: number
+  is_active: boolean
+}
+
+export interface LiveScoreEvent {
+  player_id: number | null
+  player_name: string | null
+  player_image_path: string | null
+  team_name: string | null
+  team_image_path: string | null
+  drafted_by_username: string | null
+  event_type: 'goal' | 'assist' | 'yellow_card' | 'red_card' | 'clean_sheet'
+  minute: number | null
+  points: number
+  fixture_name: string | null
+}
+
+export interface LiveResponse {
+  is_live: boolean
+  players: LivePlayer[]
+  events: LiveScoreEvent[]
+}
+
 export interface ScoringRule {
   event_key: string
   weight: number

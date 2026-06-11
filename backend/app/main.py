@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 from app.config import settings
 from app.database import AsyncSessionLocal, engine
 from app.models import *  # noqa: F401,F403 — ensures all models are registered with Base
-from app.routers import admin, auth, drafts, fixtures, players, scores
+from app.routers import admin, auth, drafts, fixtures, live, players, scores
 from app.routers.seasons import admin_router as seasons_admin_router
 from app.routers.seasons import setup_seasons_on_startup
 from app.routers.seasons import public_router as seasons_public_router
@@ -42,6 +42,7 @@ app.include_router(scores.router, prefix="/api", tags=["api"])
 app.include_router(drafts.router, prefix="/api", tags=["api"])
 app.include_router(players.router, prefix="/api", tags=["api"])
 app.include_router(fixtures.router, prefix="/api", tags=["api"])
+app.include_router(live.router, prefix="/api", tags=["api"])
 app.include_router(seasons_public_router, prefix="/api", tags=["api"])
 app.include_router(seasons_admin_router, prefix="/admin", tags=["admin"])
 app.include_router(admin.router, prefix="/admin", tags=["admin"])

@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings } from 'lucide-react'
+import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings, Radio } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import {
   Drawer,
@@ -13,6 +13,7 @@ import {
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 
 const navItems = [
+  { href: '/live', label: 'Live', icon: Radio, live: true },
   { href: '/scoreboard', label: 'Scoreboard', icon: Trophy },
   { href: '/players', label: 'Players', icon: Users },
   { href: '/drafts', label: 'Drafts', icon: ClipboardList },
@@ -33,9 +34,16 @@ export function NavBar() {
 
         {/* Desktop nav */}
         <div className="hidden sm:flex items-center gap-6 text-sm font-medium">
-          {navItems.map(({ href, label, icon: Icon }) => (
+          {navItems.map(({ href, label, icon: Icon, live }) => (
             <Link key={href} href={href} className="flex items-center gap-1.5 hover:text-primary transition-colors">
-              <Icon size={15} />
+              {live ? (
+                <span className="relative flex items-center">
+                  <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-red-500 opacity-75" />
+                  <Icon size={15} className="relative" />
+                </span>
+              ) : (
+                <Icon size={15} />
+              )}
               {label}
             </Link>
           ))}
@@ -60,11 +68,14 @@ export function NavBar() {
                 <div className="flex items-center justify-between">
                   <DrawerClose asChild>
                     <Link
-                      href="/scoreboard"
+                      href="/live"
                       className="flex items-center gap-3 px-2 py-3 rounded-md hover:bg-accent transition-colors flex-1"
                     >
-                      <Trophy size={18} />
-                      Scoreboard
+                      <span className="relative flex items-center">
+                        <span className="animate-ping absolute inline-flex h-2 w-2 rounded-full bg-red-500 opacity-75" />
+                        <Radio size={18} className="relative" />
+                      </span>
+                      Live
                     </Link>
                   </DrawerClose>
                   <ThemeToggle />

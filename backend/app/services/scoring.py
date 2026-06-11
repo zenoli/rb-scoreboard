@@ -1,7 +1,7 @@
 """Score computation — always recomputed from events, never stored."""
 
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date
 
 from sqlalchemy import select
@@ -895,3 +895,255 @@ async def _clean_sheet_events(
                     )
                 )
     return cs_events
+
+
+# ---------------------------------------------------------------------------
+# Live view data
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class LivePlayer:
+    player_id: int
+    display_name: str | None
+    image_path: str | None
+    team_image_path: str | None
+    position_category: str | None
+    drafted_by_username: str
+    total_points: float
+    live_points: float
+    is_active: bool  # True if on pitch (starter not subbed off, or came on as sub)
+
+
+@dataclass
+class LiveScoreEvent:
+    player_id: int | None
+    player_name: str | None
+    player_image_path: str | None
+    team_name: str | None
+    team_image_path: str | None
+    drafted_by_username: str | None
+    event_type: str
+    minute: int | None
+    points: float
+    fixture_name: str | None
+
+
+@dataclass
+class LiveData:
+    is_live: bool
+    players: list[LivePlayer] = field(default_factory=list)
+    events: list[LiveScoreEvent] = field(default_factory=list)
+
+
+async def compute_live_data(session: AsyncSession) -> LiveData:
+    season = await _get_active_season(session)
+    if season is None:
+        return LiveData(is_live=False)
+
+    weights = await _load_weights(session, season.id)
+
+    # Load LIVE fixtures with all needed relations
+    live_result = await session.execute(
+        select(Fixture)
+        .where(Fixture.season_id == season.id)
+        .where(Fixture.state == "LIVE")
+        .options(
+            selectinload(Fixture.participants),
+            selectinload(Fixture.events).selectinload(Event.event_type),
+            selectinload(Fixture.lineups),
+        )
+    )
+    live_fixtures = list(live_result.scalars().all())
+
+    if not live_fixtures:
+        return LiveData(is_live=False)
+
+    # Collect team IDs participating in live fixtures
+    live_team_ids: set[int] = set()
+    for fx in live_fixtures:
+        for p in fx.participants:
+            live_team_ids.add(p.team_id)
+
+    # Load all draft entries for this season, including player + team + user
+    drafts_result = await session.execute(
+        select(Draft)
+        .where(Draft.season_id == season.id)
+        .where(Draft.player_id.isnot(None))
+        .options(
+            selectinload(Draft.player).selectinload(Player.position),
+            selectinload(Draft.player).selectinload(Player.team),
+            selectinload(Draft.user),
+        )
+    )
+    all_drafts = list(drafts_result.scalars().all())
+
+    # Filter to players whose team is in a live fixture
+    live_player_ids: set[int] = set()
+    player_to_username: dict[int, str] = {}
+    player_obj: dict[int, Player] = {}
+
+    for entry in all_drafts:
+        if not entry.player or not entry.player_id:
+            continue
+        if entry.player.team_id in live_team_ids:
+            pid = entry.player_id
+            live_player_ids.add(pid)
+            player_to_username[pid] = entry.user.username if entry.user else "?"
+            player_obj[pid] = entry.player
+
+    if not live_player_ids:
+        return LiveData(is_live=True)
+
+    # Compute points from live fixtures only
+    live_player_points: dict[int, float] = {pid: 0.0 for pid in live_player_ids}
+    live_events: list[LiveScoreEvent] = []
+
+    for fixture in live_fixtures:
+        for event in fixture.events:
+            if not event.event_type:
+                continue
+            dev = (event.event_type.developer_name or "").upper()
+
+            pid: int | None = None
+            event_type_str: str | None = None
+            pts: float = 0.0
+
+            if dev in _GOAL_TYPES and event.player_id in live_player_ids:
+                pid, event_type_str, pts = event.player_id, "goal", weights["goal"]
+            elif dev in _ASSIST_TYPES and event.player_id in live_player_ids:
+                pid, event_type_str, pts = event.player_id, "assist", weights["assist"]
+            elif dev in _YELLOW_TYPES and event.player_id in live_player_ids:
+                pid, event_type_str, pts = event.player_id, "yellow_card", weights["yellow_card"]
+            elif dev in _RED_TYPES and event.player_id in live_player_ids:
+                pid, event_type_str, pts = event.player_id, "red_card", weights["red_card"]
+            elif dev in _GOAL_TYPES and event.related_player_id in live_player_ids:
+                pid, event_type_str, pts = event.related_player_id, "assist", weights["assist"]
+
+            if pid is not None and event_type_str is not None:
+                live_player_points[pid] = live_player_points.get(pid, 0.0) + pts
+                player = player_obj.get(pid)
+                live_events.append(
+                    LiveScoreEvent(
+                        player_id=pid,
+                        player_name=player.display_name if player else None,
+                        player_image_path=player.image_path if player else None,
+                        team_name=player.team.name if player and player.team else None,
+                        team_image_path=player.team.image_path if player and player.team else None,
+                        drafted_by_username=player_to_username.get(pid),
+                        event_type=event_type_str,
+                        minute=event.minute,
+                        points=pts,
+                        fixture_name=fixture.name,
+                    )
+                )
+
+    # Clean sheet (volatile) from live fixtures for GK players
+    gk_ids_live = {
+        pid for pid in live_player_ids
+        if player_obj[pid].position and player_obj[pid].position.category == "GK"
+    }
+    for fixture in live_fixtures:
+        goals_conceded, starter_ids_fx, sub_on_fx, sub_off_fx = _parse_fixture_events(fixture)
+        fixture_team_ids = {p.team_id for p in fixture.participants}
+        for pid in gk_ids_live:
+            keeper_team = _find_keeper_team(pid, fixture, starter_ids_fx, sub_on_fx)
+            if keeper_team not in fixture_team_ids:
+                continue
+            if not _keeper_played(pid, starter_ids_fx, sub_on_fx, sub_off_fx):
+                continue
+            if goals_conceded.get(keeper_team, 0) == 0:
+                live_player_points[pid] = live_player_points.get(pid, 0.0) + weights["clean_sheet"]
+                player = player_obj.get(pid)
+                live_events.append(
+                    LiveScoreEvent(
+                        player_id=pid,
+                        player_name=player.display_name if player else None,
+                        player_image_path=player.image_path if player else None,
+                        team_name=player.team.name if player and player.team else None,
+                        team_image_path=player.team.image_path if player and player.team else None,
+                        drafted_by_username=player_to_username.get(pid),
+                        event_type="clean_sheet",
+                        minute=None,
+                        points=weights["clean_sheet"],
+                        fixture_name=fixture.name,
+                    )
+                )
+
+    # Compute total points from ALL completed+live fixtures for these players
+    all_fixtures_result = await session.execute(
+        select(Fixture)
+        .where(Fixture.season_id == season.id)
+        .where(Fixture.state.in_(["LIVE", "FT", "AET", "FT_PEN"]))
+        .options(
+            selectinload(Fixture.events).selectinload(Event.event_type),
+            selectinload(Fixture.participants),
+            selectinload(Fixture.lineups),
+        )
+    )
+    all_fixtures = list(all_fixtures_result.scalars().all())
+
+    total_player_points: dict[int, float] = {pid: 0.0 for pid in live_player_ids}
+
+    for fixture in all_fixtures:
+        for event in fixture.events:
+            if not event.event_type:
+                continue
+            dev = (event.event_type.developer_name or "").upper()
+            if dev in _GOAL_TYPES and event.player_id in live_player_ids:
+                total_player_points[event.player_id] += weights["goal"]
+            elif dev in _ASSIST_TYPES and event.player_id in live_player_ids:
+                total_player_points[event.player_id] += weights["assist"]
+            elif dev in _YELLOW_TYPES and event.player_id in live_player_ids:
+                total_player_points[event.player_id] += weights["yellow_card"]
+            elif dev in _RED_TYPES and event.player_id in live_player_ids:
+                total_player_points[event.player_id] += weights["red_card"]
+            if dev in _GOAL_TYPES and event.related_player_id in live_player_ids:
+                total_player_points[event.related_player_id] += weights["assist"]
+
+        # Clean sheets from all fixtures
+        goals_conceded, starter_ids_fx, sub_on_fx, sub_off_fx = _parse_fixture_events(fixture)
+        fixture_team_ids = {p.team_id for p in fixture.participants}
+        for pid in gk_ids_live:
+            keeper_team = _find_keeper_team(pid, fixture, starter_ids_fx, sub_on_fx)
+            if keeper_team not in fixture_team_ids:
+                continue
+            if not _keeper_played(pid, starter_ids_fx, sub_on_fx, sub_off_fx):
+                continue
+            if goals_conceded.get(keeper_team, 0) == 0:
+                total_player_points[pid] += weights["clean_sheet"]
+
+    # Determine playing status from live fixture lineups
+    player_is_active: dict[int, bool] = {pid: False for pid in live_player_ids}
+    for fixture in live_fixtures:
+        _, starter_ids_fx, sub_on_fx, sub_off_fx = _parse_fixture_events(fixture)
+        fixture_team_ids = {p.team_id for p in fixture.participants}
+        for pid in live_player_ids:
+            player = player_obj[pid]
+            if player.team_id not in fixture_team_ids:
+                continue
+            is_starter = starter_ids_fx.get(pid) == LINEUP_STARTER
+            is_sub_on = pid in sub_on_fx
+            is_sub_off = pid in sub_off_fx
+            if (is_starter and not is_sub_off) or is_sub_on:
+                player_is_active[pid] = True
+
+    result_players = [
+        LivePlayer(
+            player_id=pid,
+            display_name=player_obj[pid].display_name,
+            image_path=player_obj[pid].image_path,
+            team_image_path=player_obj[pid].team.image_path if player_obj[pid].team else None,
+            position_category=player_obj[pid].position.category if player_obj[pid].position else None,
+            drafted_by_username=player_to_username.get(pid, "?"),
+            total_points=total_player_points.get(pid, 0.0),
+            live_points=live_player_points.get(pid, 0.0),
+            is_active=player_is_active.get(pid, False),
+        )
+        for pid in live_player_ids
+    ]
+
+    # Sort events: most recent minute first, None (clean sheets) last
+    live_events.sort(key=lambda e: (e.minute is None, -(e.minute or 0)))
+
+    return LiveData(is_live=True, players=result_players, events=live_events)
