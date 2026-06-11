@@ -33,6 +33,15 @@ LINEUP_STARTER = 11
 # Penalty shootout period (Sportmonks period_id = 5)
 PENALTY_SHOOTOUT_PERIOD = 5
 
+# Sportmonks fixture states considered "in play" (live)
+LIVE_STATES = {"LIVE", "INPLAY_1ST_HALF", "INPLAY_2ND_HALF", "HT", "INPLAY_ET", "INPLAY_ET_2ND_HALF", "PEN_LIVE"}
+
+# Fixture states where the match is finished
+FINISHED_STATES = {"FT", "AET", "FT_PEN"}
+
+# All states where scoring should be counted (live + finished)
+ACTIVE_STATES = LIVE_STATES | FINISHED_STATES
+
 
 @dataclass
 class UserScore:
@@ -190,10 +199,10 @@ async def _apply_clean_sheets(
     gk_ids = set(gk_result.scalars().all())
 
     for fixture in fixtures:
-        if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
+        if fixture.state not in ACTIVE_STATES:
             continue
 
-        is_live = fixture.state == "LIVE"
+        is_live = fixture.state in LIVE_STATES
         goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
         fixture_team_ids = {p.team_id for p in fixture.participants}
 
@@ -333,7 +342,7 @@ async def compute_score_history(session: AsyncSession) -> ScoreHistory:
     fixtures_result = await session.execute(
         select(Fixture)
         .where(Fixture.season_id == season.id)
-        .where(Fixture.state.in_(["FT", "AET", "FT_PEN"]))
+        .where(Fixture.state.in_(list(FINISHED_STATES)))
         .where(Fixture.starting_at.isnot(None))
         .options(
             selectinload(Fixture.participants),
@@ -545,7 +554,7 @@ async def _per_player_clean_sheets(
     )
     cs: dict[int, float] = {}
     for fixture in fixtures_result.scalars().all():
-        if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
+        if fixture.state not in ACTIVE_STATES:
             continue
         goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
         fixture_team_ids = {p.team_id for p in fixture.participants}
@@ -864,9 +873,9 @@ async def _clean_sheet_events(
     )
     cs_events: list[ScoreEvent] = []
     for fixture in fixtures_result.scalars().all():
-        if fixture.state not in ("LIVE", "FT", "AET", "FT_PEN"):
+        if fixture.state not in ACTIVE_STATES:
             continue
-        is_live = fixture.state == "LIVE"
+        is_live = fixture.state in LIVE_STATES
         goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
         fixture_team_ids = {p.team_id for p in fixture.participants}
         for pid in gk_ids:
@@ -947,7 +956,7 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
     live_result = await session.execute(
         select(Fixture)
         .where(Fixture.season_id == season.id)
-        .where(Fixture.state == "LIVE")
+        .where(Fixture.state.in_(list(LIVE_STATES)))
         .options(
             selectinload(Fixture.participants),
             selectinload(Fixture.events).selectinload(Event.event_type),
@@ -1074,7 +1083,7 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
     all_fixtures_result = await session.execute(
         select(Fixture)
         .where(Fixture.season_id == season.id)
-        .where(Fixture.state.in_(["LIVE", "FT", "AET", "FT_PEN"]))
+        .where(Fixture.state.in_(list(ACTIVE_STATES)))
         .options(
             selectinload(Fixture.events).selectinload(Event.event_type),
             selectinload(Fixture.participants),

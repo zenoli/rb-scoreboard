@@ -8,6 +8,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
+from app.services.scoring import LIVE_STATES
 from app.models.coach import Coach
 from app.models.event import Event
 from app.models.event_type import EventType
@@ -350,7 +351,7 @@ async def _active_fixture_ids(session: AsyncSession, season_id: int) -> list[int
             Fixture.season_id == season_id,
         ).where(
             (Fixture.starting_at >= window_start) & (Fixture.starting_at <= window_end)
-            | (Fixture.state == "LIVE")
+            | (Fixture.state.in_(list(LIVE_STATES)))
         )
     )
     return list(result.scalars().all())
