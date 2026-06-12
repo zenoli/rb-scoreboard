@@ -231,11 +231,12 @@ async def _sync_events_for_fixtures(session: AsyncSession, fixture_ids: list[int
         )
         fixture_data = raw.get("data", {})
         state = _extract_state(fixture_data)
-        await session.execute(
-            Fixture.__table__.update()
-            .where(Fixture.id == fixture_id)
-            .values(state=state)
-        )
+        if state is not None:
+            await session.execute(
+                Fixture.__table__.update()
+                .where(Fixture.id == fixture_id)
+                .values(state=state)
+            )
         for e in fixture_data.get("events", []):
             event_rows.append({
                 "id": e["id"],
