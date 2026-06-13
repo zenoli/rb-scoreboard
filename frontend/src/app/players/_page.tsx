@@ -30,6 +30,7 @@ export default function PlayersPage() {
   const [countryFilter, setCountryFilter] = useState<number | null>(null)
   const [positionFilter, setPositionFilter] = useState<Set<string>>(new Set())
   const [category, setCategory] = useState<CategoryKey | null>(null)
+  const [visibleCount, setVisibleCount] = useState(25)
 
   // Collapsible flag grid state
   const [flagsExpanded, setFlagsExpanded] = useState(false)
@@ -150,6 +151,9 @@ export default function PlayersPage() {
     currentFlagHeight >= gridMeasurements.fullHeight - 1
 
   const activeCat = category ? CATEGORIES.find((c) => c.key === category)! : null
+
+  // Reset pagination when filters change
+  useEffect(() => { setVisibleCount(25) }, [positionFilter, countryFilter, search, category])
 
   const filtered = useMemo(() => {
     if (!players) return []
@@ -320,7 +324,7 @@ export default function PlayersPage() {
           {filtered.length === 0 && (
             <p className="text-sm text-muted-foreground text-center py-8">No players found.</p>
           )}
-          {filtered.map((p) => (
+          {filtered.slice(0, visibleCount).map((p) => (
             <button
               key={p.id}
               onClick={() => router.push(`/player/${p.id}`)}
@@ -360,6 +364,14 @@ export default function PlayersPage() {
               </div>
             </button>
           ))}
+          {visibleCount < filtered.length && (
+            <button
+              onClick={() => setVisibleCount((n) => n + 25)}
+              className="text-sm text-muted-foreground hover:text-foreground py-3 transition-colors"
+            >
+              Show more ({filtered.length - visibleCount} remaining)
+            </button>
+          )}
         </div>
       )}
     </div>
