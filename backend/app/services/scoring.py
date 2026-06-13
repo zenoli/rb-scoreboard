@@ -939,6 +939,17 @@ class LiveScoreEvent:
 
 
 @dataclass
+class FixturePlayer:
+    player_id: int
+    display_name: str | None
+    image_path: str | None
+    team_image_path: str | None
+    position_category: str | None
+    drafted_by_username: str
+    points: float
+
+
+@dataclass
 class LiveData:
     is_live: bool
     next_kickoff: datetime | None = None
@@ -1169,3 +1180,131 @@ async def compute_live_data(session: AsyncSession) -> LiveData:
     live_events.sort(key=lambda e: (e.minute is None, -(e.minute or 0)))
 
     return LiveData(is_live=True, next_kickoff=next_kickoff, players=result_players, events=live_events)
+
+
+async def compute_fixture_data(
+    session: AsyncSession, fixture: "Fixture"
+) -> tuple[list[FixturePlayer], list[LiveScoreEvent]]:
+    """Compute drafted player points and events for a specific fixture."""
+    season = await _get_active_season(session)
+    if season is None or fixture.state not in ACTIVE_STATES:
+        return [], []
+
+    weights = await _load_weights(session, season.id)
+
+    fixture_team_ids = {p.team_id for p in fixture.participants}
+
+    drafts_result = await session.execute(
+        select(Draft)
+        .where(Draft.season_id == season.id)
+        .where(Draft.player_id.isnot(None))
+        .options(
+            selectinload(Draft.player).selectinload(Player.position),
+            selectinload(Draft.player).selectinload(Player.team),
+            selectinload(Draft.user),
+        )
+    )
+    all_drafts = list(drafts_result.scalars().all())
+
+    player_ids: set[int] = set()
+    player_to_username: dict[int, str] = {}
+    player_obj: dict[int, Player] = {}
+
+    for entry in all_drafts:
+        if not entry.player or not entry.player_id:
+            continue
+        if entry.player.team_id in fixture_team_ids:
+            pid = entry.player_id
+            player_ids.add(pid)
+            player_to_username[pid] = entry.user.username if entry.user else "?"
+            player_obj[pid] = entry.player
+
+    player_points: dict[int, float] = {pid: 0.0 for pid in player_ids}
+    events_out: list[LiveScoreEvent] = []
+
+    for event in fixture.events:
+        if not event.event_type:
+            continue
+        dev = (event.event_type.developer_name or "").upper()
+
+        pid: int | None = None
+        event_type_str: str | None = None
+        pts: float = 0.0
+
+        if dev in _GOAL_TYPES and event.player_id in player_ids:
+            pid, event_type_str, pts = event.player_id, "goal", weights["goal"]
+        elif dev in _ASSIST_TYPES and event.player_id in player_ids:
+            pid, event_type_str, pts = event.player_id, "assist", weights["assist"]
+        elif dev in _YELLOW_TYPES and event.player_id in player_ids:
+            pid, event_type_str, pts = event.player_id, "yellow_card", weights["yellow_card"]
+        elif dev in _RED_TYPES and event.player_id in player_ids:
+            pid, event_type_str, pts = event.player_id, "red_card", weights["red_card"]
+        elif dev in _GOAL_TYPES and event.related_player_id in player_ids:
+            pid, event_type_str, pts = event.related_player_id, "assist", weights["assist"]
+
+        if pid is not None and event_type_str is not None:
+            player_points[pid] += pts
+            player = player_obj.get(pid)
+            events_out.append(
+                LiveScoreEvent(
+                    player_id=pid,
+                    player_name=player.display_name if player else None,
+                    player_image_path=player.image_path if player else None,
+                    team_name=player.team.name if player and player.team else None,
+                    team_image_path=player.team.image_path if player and player.team else None,
+                    drafted_by_username=player_to_username.get(pid),
+                    event_type=event_type_str,
+                    minute=event.minute,
+                    points=pts,
+                    fixture_name=fixture.name,
+                )
+            )
+
+    # Clean sheets
+    gk_ids = {
+        pid
+        for pid in player_ids
+        if player_obj[pid].position and player_obj[pid].position.category == "GK"
+    }
+    if gk_ids:
+        goals_conceded, starter_ids, sub_on, sub_off = _parse_fixture_events(fixture)
+        for pid in gk_ids:
+            keeper_team = _find_keeper_team(pid, fixture, starter_ids, sub_on)
+            if keeper_team not in fixture_team_ids:
+                continue
+            if not _keeper_played(pid, starter_ids, sub_on, sub_off):
+                continue
+            if goals_conceded.get(keeper_team, 0) == 0:
+                player_points[pid] += weights["clean_sheet"]
+                player = player_obj.get(pid)
+                events_out.append(
+                    LiveScoreEvent(
+                        player_id=pid,
+                        player_name=player.display_name if player else None,
+                        player_image_path=player.image_path if player else None,
+                        team_name=player.team.name if player and player.team else None,
+                        team_image_path=player.team.image_path if player and player.team else None,
+                        drafted_by_username=player_to_username.get(pid),
+                        event_type="clean_sheet",
+                        minute=None,
+                        points=weights["clean_sheet"],
+                        fixture_name=fixture.name,
+                    )
+                )
+
+    events_out.sort(key=lambda e: (e.minute is None, -(e.minute or 0)))
+
+    result_players = [
+        FixturePlayer(
+            player_id=pid,
+            display_name=player_obj[pid].display_name,
+            image_path=player_obj[pid].image_path,
+            team_image_path=player_obj[pid].team.image_path if player_obj[pid].team else None,
+            position_category=player_obj[pid].position.category if player_obj[pid].position else None,
+            drafted_by_username=player_to_username.get(pid, "?"),
+            points=player_points.get(pid, 0.0),
+        )
+        for pid in player_ids
+    ]
+
+    return result_players, events_out

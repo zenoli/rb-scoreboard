@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings, Radio } from 'lucide-react'
+import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings, Radio, CalendarDays } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useLiveStatus } from '@/components/live-status-provider'
 import {
@@ -16,6 +16,7 @@ import { VisuallyHidden } from '@radix-ui/react-visually-hidden'
 const navItems = [
   { href: '/live', label: 'Live', icon: Radio, live: true },
   { href: '/scoreboard', label: 'Scoreboard', icon: Trophy },
+  { href: '/fixtures', label: 'Fixtures', icon: CalendarDays },
   { href: '/players', label: 'Players', icon: Users },
   { href: '/drafts', label: 'Drafts', icon: ClipboardList },
   { href: '/admin', label: 'Admin', icon: Settings },

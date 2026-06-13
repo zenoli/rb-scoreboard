@@ -139,6 +139,41 @@ export interface LiveResponse {
   events: LiveScoreEvent[]
 }
 
+export interface FixtureParticipant {
+  team_id: number
+  team_name: string | null
+  team_image_path: string | null
+  location: string | null
+}
+
+export interface FixtureListItem {
+  id: number
+  name: string | null
+  starting_at: string | null
+  state: string | null
+  participants: FixtureParticipant[]
+}
+
+export interface FixturePlayer {
+  player_id: number
+  display_name: string | null
+  image_path: string | null
+  team_image_path: string | null
+  position_category: string | null
+  drafted_by_username: string
+  points: number
+}
+
+export interface FixtureDetailResponse {
+  fixture_id: number
+  fixture_name: string | null
+  state: string | null
+  starting_at: string | null
+  participants: FixtureParticipant[]
+  players: FixturePlayer[]
+  events: LiveScoreEvent[]
+}
+
 export interface ScoringRule {
   event_key: string
   weight: number
