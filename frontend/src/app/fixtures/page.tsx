@@ -154,7 +154,7 @@ export default function FixturesPage() {
       <h1 className="text-xl font-semibold">Fixtures</h1>
       {groups.map(({ dateLabel, fixtures: group }) => (
         <div key={dateLabel} className="flex flex-col gap-2">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">{dateLabel}</h2>
+          <h2 className="sticky top-14 z-20 bg-background/80 backdrop-blur-sm text-sm font-semibold text-muted-foreground uppercase tracking-wide py-2">{dateLabel}</h2>
           {group.map((f) => (
             <FixtureCard key={f.id} fixture={f} />
           ))}
