@@ -68,7 +68,7 @@ export function ScoreHistoryChart({
 
   return (
     <ChartContainer config={config} className="h-64 w-full">
-      <LineChart data={chartData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
+      <LineChart data={chartData} margin={{ left: 4, right: 8, top: 8, bottom: 0 }}>
         <CartesianGrid vertical={false} />
         <XAxis
           dataKey="date"
