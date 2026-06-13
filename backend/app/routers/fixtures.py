@@ -132,7 +132,7 @@ async def get_fixtures(session: AsyncSession = Depends(get_db)):
         FixtureResponse(
             id=f.id,
             name=f.name,
-            starting_at=f.starting_at.isoformat() if f.starting_at else None,
+            starting_at=f.starting_at.isoformat() + 'Z' if f.starting_at else None,
             state=f.state,
             stage_id=f.stage_id,
             round_id=f.round_id,
@@ -228,7 +228,7 @@ async def get_fixture_detail(fixture_id: int, session: AsyncSession = Depends(ge
         fixture_id=fixture.id,
         fixture_name=fixture.name,
         state=fixture.state,
-        starting_at=fixture.starting_at.isoformat() if fixture.starting_at else None,
+        starting_at=fixture.starting_at.isoformat() + 'Z' if fixture.starting_at else None,
         home_score=home_score,
         away_score=away_score,
         participants=[
