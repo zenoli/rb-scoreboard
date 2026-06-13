@@ -138,6 +138,26 @@ let
     echo "Done."
   '';
 
+  gen-icons = pkgs.writeShellScriptBin "gen-icons" ''
+    set -e
+    src="$FRONTEND_DIR/public/favicon.svg"
+    out="$FRONTEND_DIR/public"
+
+    # Create a version with fixed dark stroke (no currentColor)
+    tmp=$(mktemp /tmp/favicon-XXXXXX.svg)
+    ${pkgs.gnused}/bin/sed 's/stroke="currentColor"/stroke="#1a1a2e"/' "$src" \
+      | ${pkgs.gnused}/bin/sed '/<style>/,/<\/style>/d' > "$tmp"
+
+    for size in 180 192 512; do
+      echo "Generating ''${size}x''${size} icon..."
+      ${pkgs.librsvg}/bin/rsvg-convert -w "$size" -h "$size" "$tmp" -o "$out/icon-''${size}.png"
+    done
+
+    cp "$out/icon-180.png" "$out/apple-touch-icon.png"
+    rm "$tmp"
+    echo "Done. Icons written to $out/"
+  '';
+
   stats-preview = pkgs.writeShellScriptBin "stats-preview" ''
     set -e
     if [ -n "$1" ]; then
@@ -184,8 +204,10 @@ pkgs.mkShell {
     sync-all
     run-prod
     db-ui
+    gen-icons
     stats-pdf
     stats-preview
+    pkgs.librsvg
     pkgs.sqlite-web
     pkgs.pandoc
     pkgs.wkhtmltopdf
