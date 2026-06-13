@@ -296,7 +296,7 @@ export default function ScoreboardPage() {
         <>
           <h2 className="text-xl font-semibold mt-8 mb-4">Points over time</h2>
           <div className="rounded-md border p-4">
-            <ScoreHistoryChart data={history} highlightedUserId={highlightedUserId} onHighlight={handleHighlight} />
+            <ScoreHistoryChart data={history} highlightedUserId={highlightedUserId} />
           </div>
         </>
       )}

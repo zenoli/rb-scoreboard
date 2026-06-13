@@ -39,11 +39,9 @@ function formatDate(iso: unknown) {
 export function ScoreHistoryChart({
   data,
   highlightedUserId,
-  onHighlight,
 }: {
   data: ScoreHistoryResponse
   highlightedUserId: number | null
-  onHighlight: (userId: number | null) => void
 }) {
   if (data.dates.length === 0) return null
 
@@ -91,9 +89,8 @@ export function ScoreHistoryChart({
               strokeWidth={isHighlighted ? 4 : 2}
               strokeOpacity={hasHighlight && !isHighlighted ? 0.3 : 1}
               dot={false}
-              activeDot={{ r: 4, cursor: 'pointer', stroke: color, strokeWidth: 0 }}
-              style={{ transition: 'stroke-width 200ms ease, stroke-opacity 200ms ease', cursor: 'pointer', outline: 'none' }}
-              onClick={() => onHighlight(isHighlighted ? null : s.user_id)}
+              activeDot={false}
+              style={{ transition: 'stroke-width 200ms ease, stroke-opacity 200ms ease', pointerEvents: 'none', outline: 'none' }}
             />
           )
         })}
