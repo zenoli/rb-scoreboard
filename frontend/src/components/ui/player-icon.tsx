@@ -1,6 +1,7 @@
 'use client'
 
 import React from 'react'
+import { User } from 'lucide-react'
 
 interface PlayerIconProps {
   imagePath: string | null
@@ -38,12 +39,16 @@ export function PlayerIcon({
         {imagePath ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imagePath} alt={name ?? ''} className="w-full h-full object-cover" />
-        ) : (
+        ) : name ? (
           <div
             className="w-full h-full flex items-center justify-center font-bold text-muted-foreground"
             style={{ fontSize: Math.round(size * 0.3) }}
           >
-            {(name ?? '?').slice(0, 2).toUpperCase()}
+            {name.slice(0, 2).toUpperCase()}
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+            <User style={{ width: Math.round(size * 0.55), height: Math.round(size * 0.55) }} />
           </div>
         )}
       </div>
