@@ -10,7 +10,7 @@ from app.models.draft import Draft
 from app.models.player import Player
 from app.models.season import Season
 from app.models.user import User
-from app.services.scoring import ScoreEvent, compute_all_player_points, compute_player_score_events
+from app.services.scoring import PlayerPointsBreakdown, ScoreEvent, compute_all_player_points, compute_player_score_events
 
 router = APIRouter()
 
@@ -29,6 +29,10 @@ class PlayerResponse(BaseModel):
     position_name: str | None
     position_category: str | None
     total_points: float | None = None
+    goal_points: float | None = None
+    assist_points: float | None = None
+    card_points: float | None = None
+    clean_sheet_points: float | None = None
     drafted_by_username: str | None = None
 
     model_config = {"from_attributes": True}
@@ -127,7 +131,7 @@ async def get_players(
     result = await session.execute(stmt)
     players = result.scalars().all()
 
-    points_map: dict[int, float] = {}
+    points_map: dict[int, PlayerPointsBreakdown] = {}
     draft_map: dict[int, str] = {}
     if include_points:
         points_map = await compute_all_player_points(session)
@@ -140,8 +144,9 @@ async def get_players(
             )
             draft_map = {row.player_id: row.username for row in drafts_result.all()}
 
-    return [
-        PlayerResponse(
+    def _build_response(p: Player) -> PlayerResponse:
+        breakdown = points_map.get(p.id)
+        return PlayerResponse(
             id=p.id,
             display_name=p.display_name,
             common_name=p.common_name,
@@ -154,11 +159,15 @@ async def get_players(
             position_id=p.position_id,
             position_name=p.position.name if p.position else None,
             position_category=p.position.category if p.position else None,
-            total_points=points_map.get(p.id),
+            total_points=breakdown.total if breakdown else None,
+            goal_points=breakdown.goal if breakdown else None,
+            assist_points=breakdown.assist if breakdown else None,
+            card_points=breakdown.card if breakdown else None,
+            clean_sheet_points=breakdown.clean_sheet if breakdown else None,
             drafted_by_username=draft_map.get(p.id),
         )
-        for p in players
-    ]
+
+    return [_build_response(p) for p in players]
 
 
 @router.get("/coaches", response_model=list[CoachResponse])

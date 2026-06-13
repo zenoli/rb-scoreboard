@@ -490,8 +490,19 @@ async def compute_player_points(session: AsyncSession, user_id: int) -> dict[int
     return player_points
 
 
-async def compute_all_player_points(session: AsyncSession) -> dict[int, float]:
-    """Returns player_id → total points for ALL players in the active season (one pass)."""
+class PlayerPointsBreakdown:
+    __slots__ = ("goal", "assist", "card", "clean_sheet", "total")
+
+    def __init__(self) -> None:
+        self.goal = 0.0
+        self.assist = 0.0
+        self.card = 0.0
+        self.clean_sheet = 0.0
+        self.total = 0.0
+
+
+async def compute_all_player_points(session: AsyncSession) -> dict[int, PlayerPointsBreakdown]:
+    """Returns player_id → points breakdown for ALL players in the active season (one pass)."""
     season = await _get_active_season(session)
     if season is None:
         return {}
@@ -505,7 +516,7 @@ async def compute_all_player_points(session: AsyncSession) -> dict[int, float]:
         .options(selectinload(Event.event_type))
     )
 
-    player_points: dict[int, float] = defaultdict(float)
+    player_points: dict[int, PlayerPointsBreakdown] = defaultdict(PlayerPointsBreakdown)
 
     for event in events_result.scalars().all():
         if not event.event_type:
@@ -514,15 +525,20 @@ async def compute_all_player_points(session: AsyncSession) -> dict[int, float]:
         pid = event.player_id
         if pid is not None:
             if dev in _GOAL_TYPES:
-                player_points[pid] += weights["goal"]
+                player_points[pid].goal += weights["goal"]
+                player_points[pid].total += weights["goal"]
             elif dev in _ASSIST_TYPES:
-                player_points[pid] += weights["assist"]
+                player_points[pid].assist += weights["assist"]
+                player_points[pid].total += weights["assist"]
             elif dev in _YELLOW_TYPES:
-                player_points[pid] += weights["yellow_card"]
+                player_points[pid].card += weights["yellow_card"]
+                player_points[pid].total += weights["yellow_card"]
             elif dev in _RED_TYPES:
-                player_points[pid] += weights["red_card"]
+                player_points[pid].card += weights["red_card"]
+                player_points[pid].total += weights["red_card"]
         if dev in _GOAL_TYPES and event.related_player_id is not None:
-            player_points[event.related_player_id] += weights["assist"]
+            player_points[event.related_player_id].assist += weights["assist"]
+            player_points[event.related_player_id].total += weights["assist"]
 
     # Clean sheets for all GKs in the season
     gk_result = await session.execute(
@@ -535,7 +551,8 @@ async def compute_all_player_points(session: AsyncSession) -> dict[int, float]:
     if gk_ids:
         cs = await _per_player_clean_sheets(session, season.id, gk_ids, weights)
         for pid, pts in cs.items():
-            player_points[pid] += pts
+            player_points[pid].clean_sheet += pts
+            player_points[pid].total += pts
 
     return dict(player_points)
 

@@ -2,11 +2,21 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import { Target, Handshake, Layers2, Shield } from 'lucide-react'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
 import type { PlayerResponse } from '@/lib/types'
 
 const POSITIONS = ['GK', 'DEF', 'MID', 'FWD'] as const
+
+type CategoryKey = 'goals' | 'assists' | 'cards' | 'clean_sheets'
+
+const CATEGORIES: { key: CategoryKey; label: string; icon: typeof Target; field: keyof PlayerResponse }[] = [
+  { key: 'goals', label: 'goals', icon: Target, field: 'goal_points' },
+  { key: 'assists', label: 'assists', icon: Handshake, field: 'assist_points' },
+  { key: 'cards', label: 'cards', icon: Layers2, field: 'card_points' },
+  { key: 'clean_sheets', label: 'clean sheets', icon: Shield, field: 'clean_sheet_points' },
+]
 
 function formatPoints(pts: number): string {
   return pts % 1 === 0 ? String(pts) : pts.toFixed(1)
@@ -19,6 +29,7 @@ export default function PlayersPage() {
   const [search, setSearch] = useState('')
   const [countryFilter, setCountryFilter] = useState<number | null>(null)
   const [positionFilter, setPositionFilter] = useState<Set<string>>(new Set())
+  const [category, setCategory] = useState<CategoryKey | null>(null)
 
   // Collapsible flag grid state
   const [flagsExpanded, setFlagsExpanded] = useState(false)
@@ -138,14 +149,18 @@ export default function PlayersPage() {
     currentFlagHeight != null &&
     currentFlagHeight >= gridMeasurements.fullHeight - 1
 
+  const activeCat = category ? CATEGORIES.find((c) => c.key === category)! : null
+
   const filtered = useMemo(() => {
     if (!players) return []
+    const sortField = activeCat ? activeCat.field : 'total_points'
     return players
       .filter((p) => positionFilter.size === 0 || (p.position_category != null && positionFilter.has(p.position_category)))
       .filter((p) => countryFilter == null || p.team_id === countryFilter)
       .filter((p) => !search || (p.display_name ?? '').toLowerCase().includes(search.toLowerCase()))
-      .sort((a, b) => (b.total_points ?? 0) - (a.total_points ?? 0))
-  }, [players, positionFilter, countryFilter, search])
+      .filter((p) => !activeCat || ((p[activeCat.field] as number) ?? 0) > 0)
+      .sort((a, b) => ((b[sortField] as number) ?? 0) - ((a[sortField] as number) ?? 0))
+  }, [players, positionFilter, countryFilter, search, activeCat])
 
   function togglePosition(pos: string) {
     setPositionFilter((prev) => {
@@ -183,21 +198,46 @@ export default function PlayersPage() {
         )}
       </div>
 
-      {/* Position filter */}
-      <div className="flex gap-2 mb-3">
-        {POSITIONS.map((pos) => (
-          <button
-            key={pos}
-            onClick={() => togglePosition(pos)}
-            className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-              positionFilter.has(pos)
-                ? 'bg-primary text-primary-foreground border-primary'
-                : 'bg-background text-muted-foreground border-border hover:bg-accent'
-            }`}
-          >
-            {pos}
-          </button>
-        ))}
+      {/* Category + Position filters */}
+      <div className="flex items-center justify-between gap-3 mb-3">
+        {/* Category segmented control */}
+        <div className="flex rounded-lg border border-border overflow-hidden">
+          {CATEGORIES.map((cat) => {
+            const Icon = cat.icon
+            const isActive = category === cat.key
+            return (
+              <button
+                key={cat.key}
+                onClick={() => setCategory(isActive ? null : cat.key)}
+                className={`px-2.5 py-1.5 text-xs font-medium transition-colors border-r last:border-r-0 border-border flex items-center gap-1 ${
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-background text-muted-foreground hover:bg-accent'
+                }`}
+                title={cat.label}
+              >
+                <Icon className="w-3.5 h-3.5" />
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Position filter */}
+        <div className="flex gap-1.5">
+          {POSITIONS.map((pos) => (
+            <button
+              key={pos}
+              onClick={() => togglePosition(pos)}
+              className={`px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+                positionFilter.has(pos)
+                  ? 'bg-primary text-primary-foreground border-primary'
+                  : 'bg-background text-muted-foreground border-border hover:bg-accent'
+              }`}
+            >
+              {pos}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Country flags */}
@@ -259,7 +299,7 @@ export default function PlayersPage() {
               className="flex justify-center pt-2 cursor-grab active:cursor-grabbing touch-none select-none"
               onPointerDown={handleDragStart}
             >
-              <div className="w-8 h-1 rounded-full bg-muted-foreground/30" />
+              <div className="w-12 h-1 rounded-full bg-muted-foreground/30" />
             </div>
           )}
         </div>
@@ -305,9 +345,18 @@ export default function PlayersPage() {
               </div>
               <div className="flex-shrink-0 text-right">
                 <div className="text-sm font-semibold">
-                  {p.total_points != null ? formatPoints(p.total_points) : '0'}
+                  {formatPoints(activeCat ? ((p[activeCat.field] as number) ?? 0) : (p.total_points ?? 0))}
                 </div>
-                <div className="text-xs text-muted-foreground">pts</div>
+                <div className="text-xs text-muted-foreground flex items-center justify-end gap-0.5">
+                  {activeCat ? (
+                    <>
+                      <activeCat.icon className="w-3 h-3" />
+                      {activeCat.label}
+                    </>
+                  ) : (
+                    'pts'
+                  )}
+                </div>
               </div>
             </button>
           ))}

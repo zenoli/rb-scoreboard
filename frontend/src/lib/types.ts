@@ -83,6 +83,10 @@ export interface PlayerResponse {
   position_name: string | null
   position_category: string | null
   total_points?: number | null
+  goal_points?: number | null
+  assist_points?: number | null
+  card_points?: number | null
+  clean_sheet_points?: number | null
   drafted_by_username?: string | null
 }
 
