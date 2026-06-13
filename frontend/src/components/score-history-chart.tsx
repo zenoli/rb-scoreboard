@@ -91,8 +91,8 @@ export function ScoreHistoryChart({
               strokeWidth={isHighlighted ? 4 : 2}
               strokeOpacity={hasHighlight && !isHighlighted ? 0.3 : 1}
               dot={false}
-              activeDot={{ r: 4, cursor: 'pointer' }}
-              style={{ transition: 'stroke-width 200ms ease, stroke-opacity 200ms ease', cursor: 'pointer' }}
+              activeDot={{ r: 4, cursor: 'pointer', stroke: color, strokeWidth: 0 }}
+              style={{ transition: 'stroke-width 200ms ease, stroke-opacity 200ms ease', cursor: 'pointer', outline: 'none' }}
               onClick={() => onHighlight(isHighlighted ? null : s.user_id)}
             />
           )
