@@ -9,8 +9,6 @@ import {
 } from 'recharts'
 import {
   ChartContainer,
-  ChartTooltip,
-  ChartTooltipContent,
   type ChartConfig,
 } from '@/components/ui/chart'
 import type { ScoreHistoryResponse } from '@/lib/types'
@@ -38,10 +36,17 @@ function formatDate(iso: unknown) {
   return d.toLocaleDateString('en-GB', { month: 'short', day: 'numeric', timeZone: 'UTC' })
 }
 
-export function ScoreHistoryChart({ data }: { data: ScoreHistoryResponse }) {
+export function ScoreHistoryChart({
+  data,
+  highlightedUserId,
+  onHighlight,
+}: {
+  data: ScoreHistoryResponse
+  highlightedUserId: number | null
+  onHighlight: (userId: number | null) => void
+}) {
   if (data.dates.length === 0) return null
 
-  // Build recharts data: [{ date, username: points, ... }]
   const chartData = data.dates.map((date, i) => {
     const row: Record<string, string | number> = { date }
     for (const s of data.series) {
@@ -59,6 +64,8 @@ export function ScoreHistoryChart({ data }: { data: ScoreHistoryResponse }) {
     }
   }
 
+  const hasHighlight = highlightedUserId !== null
+
   return (
     <ChartContainer config={config} className="h-64 w-full">
       <LineChart data={chartData} margin={{ left: 0, right: 8, top: 8, bottom: 0 }}>
@@ -72,25 +79,24 @@ export function ScoreHistoryChart({ data }: { data: ScoreHistoryResponse }) {
           tick={{ fontSize: 11 }}
         />
         <YAxis hide />
-        <ChartTooltip
-          content={
-            <ChartTooltipContent
-              labelFormatter={formatDate}
-              indicator="dot"
+        {data.series.map((s, i) => {
+          const isHighlighted = highlightedUserId === s.user_id
+          const color = CHART_COLORS[i % CHART_COLORS.length]
+          return (
+            <Line
+              key={s.username}
+              dataKey={s.username}
+              type="monotoneX"
+              stroke={color}
+              strokeWidth={isHighlighted ? 4 : 2}
+              strokeOpacity={hasHighlight && !isHighlighted ? 0.3 : 1}
+              dot={false}
+              activeDot={{ r: 4, cursor: 'pointer' }}
+              style={{ transition: 'stroke-width 200ms ease, stroke-opacity 200ms ease', cursor: 'pointer' }}
+              onClick={() => onHighlight(isHighlighted ? null : s.user_id)}
             />
-          }
-        />
-        {data.series.map((s, i) => (
-          <Line
-            key={s.username}
-            dataKey={s.username}
-            type="monotoneX"
-            stroke={CHART_COLORS[i % CHART_COLORS.length]}
-            strokeWidth={2}
-            dot={false}
-            activeDot={{ r: 4 }}
-          />
-        ))}
+          )
+        })}
       </LineChart>
     </ChartContainer>
   )

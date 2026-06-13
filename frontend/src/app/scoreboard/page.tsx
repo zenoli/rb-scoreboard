@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   ColumnDef,
@@ -73,7 +73,11 @@ function ScoreCell({ column, value }: { column: Column<Row>; value: number }) {
   )
 }
 
-function nameColumnDef(historySeries: { user_id: number }[]): ColumnDef<Row> {
+function nameColumnDef(
+  historySeries: { user_id: number }[],
+  onHighlight: (userId: number | null) => void,
+  highlightedUserId: number | null,
+): ColumnDef<Row> {
   return {
     accessorKey: 'username',
     header: () => (
@@ -82,9 +86,16 @@ function nameColumnDef(historySeries: { user_id: number }[]): ColumnDef<Row> {
       </div>
     ),
     cell: ({ row, getValue }) => {
-      const color = chartColorForUserId(row.original.user_id, historySeries)
+      const userId = row.original.user_id
+      const color = chartColorForUserId(userId, historySeries)
       return (
-        <div className="flex items-center gap-2 font-medium">
+        <div
+          className="flex items-center gap-2 font-medium"
+          onClick={(e) => {
+            e.stopPropagation()
+            onHighlight(highlightedUserId === userId ? null : userId)
+          }}
+        >
           {color && (
             <span
               className="shrink-0 rounded-full size-2"
@@ -144,6 +155,8 @@ export default function ScoreboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'total', desc: true }])
+  const [highlightedUserId, setHighlightedUserId] = useState<number | null>(null)
+  const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map())
 
   async function load() {
     try {
@@ -163,9 +176,17 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval)
   }, [])
 
+  const handleHighlight = useCallback((userId: number | null) => {
+    setHighlightedUserId(userId)
+    if (userId !== null) {
+      const el = rowRefs.current.get(userId)
+      if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [])
+
   const columns = useMemo(
-    () => [nameColumnDef(history?.series ?? []), ...columnDefs],
-    [history?.series]
+    () => [nameColumnDef(history?.series ?? [], handleHighlight, highlightedUserId), ...columnDefs],
+    [history?.series, handleHighlight, highlightedUserId]
   )
 
   const rows: Row[] = useMemo(
@@ -236,19 +257,26 @@ export default function ScoreboardPage() {
             ))}
           </TableHeader>
           <TableBody>
-            {table.getRowModel().rows.map((row) => (
-              <TableRow
-                key={row.id}
-                className="cursor-pointer"
-                onClick={() => router.push(`/scoreboard/${row.original.user_id}`)}
-              >
-                {row.getVisibleCells().map((cell) => (
-                  <TableCell key={cell.id} className="px-0 first:pl-2">
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </TableCell>
-                ))}
-              </TableRow>
-            ))}
+            {table.getRowModel().rows.map((row) => {
+              const isHighlighted = highlightedUserId === row.original.user_id
+              return (
+                <TableRow
+                  key={row.id}
+                  ref={(el) => {
+                    if (el) rowRefs.current.set(row.original.user_id, el)
+                    else rowRefs.current.delete(row.original.user_id)
+                  }}
+                  className={clsx('cursor-pointer', isHighlighted && 'bg-muted/50')}
+                  onClick={() => router.push(`/scoreboard/${row.original.user_id}`)}
+                >
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id} className="px-0 first:pl-2">
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              )
+            })}
           </TableBody>
         </Table>
       </div>
@@ -257,7 +285,7 @@ export default function ScoreboardPage() {
         <>
           <h2 className="text-xl font-semibold mt-8 mb-4">Points over time</h2>
           <div className="rounded-md border p-4">
-            <ScoreHistoryChart data={history} />
+            <ScoreHistoryChart data={history} highlightedUserId={highlightedUserId} onHighlight={handleHighlight} />
           </div>
         </>
       )}
