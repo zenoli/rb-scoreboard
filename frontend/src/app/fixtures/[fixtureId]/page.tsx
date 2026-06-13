@@ -256,18 +256,29 @@ export default function FixtureDetailPage() {
           {label && <Badge variant={isLive ? 'default' : 'secondary'}>{label}</Badge>}
         </div>
 
-        {/* Teams */}
-        <div className="flex items-center gap-4">
-          {home?.team_image_path && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={home.team_image_path} alt={home.team_name ?? ''} className="w-10 h-10 object-contain" />
-          )}
-          {away?.team_image_path && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={away.team_image_path} alt={away.team_name ?? ''} className="w-10 h-10 object-contain" />
-          )}
-          {dateStr && <span className="text-sm text-muted-foreground">{dateStr}</span>}
+        {/* Teams + score */}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 flex-1 min-w-0">
+            {home?.team_image_path && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={home.team_image_path} alt={home.team_name ?? ''} className="w-8 h-8 object-contain flex-shrink-0" />
+            )}
+            <span className="text-sm font-medium truncate">{home?.team_name}</span>
+          </div>
+          <span className="text-xl font-bold tabular-nums flex-shrink-0">
+            {data.home_score != null && data.away_score != null
+              ? `${data.home_score} – ${data.away_score}`
+              : 'vs'}
+          </span>
+          <div className="flex items-center gap-2 flex-row-reverse flex-1 min-w-0">
+            {away?.team_image_path && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={away.team_image_path} alt={away.team_name ?? ''} className="w-8 h-8 object-contain flex-shrink-0" />
+            )}
+            <span className="text-sm font-medium truncate text-right">{away?.team_name}</span>
+          </div>
         </div>
+        {dateStr && <span className="text-xs text-muted-foreground">{dateStr}</span>}
       </div>
 
       {data.players.length === 0 ? (

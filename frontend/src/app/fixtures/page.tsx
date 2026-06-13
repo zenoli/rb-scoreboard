@@ -76,7 +76,11 @@ function FixtureCard({ fixture }: { fixture: FixtureListItem }) {
     >
       <div className="flex items-center gap-3">
         <TeamDisplay team={home} align="left" />
-        <span className="text-xs text-muted-foreground font-semibold flex-shrink-0">vs</span>
+        <span className="text-base font-bold tabular-nums flex-shrink-0 min-w-[3rem] text-center">
+          {fixture.home_score != null && fixture.away_score != null
+            ? `${fixture.home_score} - ${fixture.away_score}`
+            : 'vs'}
+        </span>
         <TeamDisplay team={away} align="right" />
       </div>
       <div className="flex items-center justify-between">

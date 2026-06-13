@@ -151,6 +151,8 @@ export interface FixtureListItem {
   name: string | null
   starting_at: string | null
   state: string | null
+  home_score: number | null
+  away_score: number | null
   participants: FixtureParticipant[]
 }
 
@@ -169,6 +171,8 @@ export interface FixtureDetailResponse {
   fixture_name: string | null
   state: string | null
   starting_at: string | null
+  home_score: number | null
+  away_score: number | null
   participants: FixtureParticipant[]
   players: FixturePlayer[]
   events: LiveScoreEvent[]
