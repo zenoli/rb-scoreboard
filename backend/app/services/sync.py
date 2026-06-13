@@ -179,7 +179,6 @@ async def sync_fixtures(session: AsyncSession, season_id: int | None = None) -> 
             "season_id": season.id,
             "name": f.get("name"),
             "starting_at": _parse_dt(f.get("starting_at")),
-            "state": _extract_state(f),
             "stage_id": f.get("stage_id"),
             "round_id": f.get("round_id"),
         })
