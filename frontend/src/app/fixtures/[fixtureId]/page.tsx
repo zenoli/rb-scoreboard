@@ -243,18 +243,7 @@ export default function FixtureDetailPage() {
       </Link>
 
       {/* Header */}
-      <div className="flex flex-col gap-3">
-        <div className="flex items-center gap-2 flex-wrap">
-          {isLive && (
-            <span className="relative flex h-2.5 w-2.5">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-500 opacity-75" />
-              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500" />
-            </span>
-          )}
-          <h1 className="text-xl font-semibold">{data.fixture_name}</h1>
-          {label && <Badge variant={isLive ? 'default' : 'secondary'}>{label}</Badge>}
-        </div>
-
+      <div className="flex flex-col gap-2">
         {/* Teams + score */}
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 flex-1 min-w-0">
@@ -277,7 +266,22 @@ export default function FixtureDetailPage() {
             <span className="text-sm font-medium truncate text-right">{away?.team_name}</span>
           </div>
         </div>
-        {dateStr && <span className="text-xs text-muted-foreground">{dateStr}</span>}
+
+        {/* Date + state badge */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-muted-foreground">{dateStr ?? ''}</span>
+          {label && (
+            <Badge variant={isLive ? 'default' : 'secondary'} className="flex items-center gap-1">
+              {isLive && (
+                <span className="relative flex h-1.5 w-1.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75" />
+                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-white" />
+                </span>
+              )}
+              {label}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {data.players.length === 0 ? (
