@@ -86,7 +86,6 @@ function FixturePlayerPin({ player }: { player: FixturePlayer }) {
 }
 
 function FixtureRow({ players }: { players: FixturePlayer[] }) {
-  if (players.length === 0) return null
   return (
     <div className="flex justify-around items-start py-2">
       {players.map((p) => (
