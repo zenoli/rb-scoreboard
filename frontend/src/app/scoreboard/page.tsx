@@ -76,7 +76,7 @@ function ScoreCell({ column, value }: { column: Column<Row>; value: number }) {
 function nameColumnDef(
   historySeries: { user_id: number }[],
   onHighlight: (userId: number | null) => void,
-  highlightedUserId: number | null,
+  highlightedUserIdRef: React.RefObject<number | null>,
 ): ColumnDef<Row> {
   return {
     accessorKey: 'username',
@@ -88,18 +88,27 @@ function nameColumnDef(
     cell: ({ row, getValue }) => {
       const userId = row.original.user_id
       const color = chartColorForUserId(userId, historySeries)
+      const highlightedUserId = highlightedUserIdRef.current
       return (
         <div
           className="flex items-center gap-2 font-medium"
           onClick={(e) => {
             e.stopPropagation()
-            onHighlight(highlightedUserId === userId ? null : userId)
+            onHighlight(highlightedUserIdRef.current === userId ? null : userId)
           }}
         >
           {color && (
             <span
-              className="shrink-0 rounded-full size-2"
-              style={{ backgroundColor: color }}
+              className="shrink-0 rounded-full"
+              style={{
+                backgroundColor: color,
+                width: highlightedUserId === userId ? '0.75rem' : '0.5rem',
+                height: highlightedUserId === userId ? '0.75rem' : '0.5rem',
+                transition: 'width 200ms ease, height 200ms ease',
+                ...(highlightedUserId === userId && {
+                  animation: 'pulse-opacity 1.5s ease-in-out infinite',
+                }),
+              }}
             />
           )}
           {getValue<string>()}
@@ -156,6 +165,7 @@ export default function ScoreboardPage() {
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'total', desc: true }])
   const [highlightedUserId, setHighlightedUserId] = useState<number | null>(null)
+  const highlightedUserIdRef = useRef<number | null>(null)
   const rowRefs = useRef<Map<number, HTMLTableRowElement>>(new Map())
 
   async function load() {
@@ -177,6 +187,7 @@ export default function ScoreboardPage() {
   }, [])
 
   const handleHighlight = useCallback((userId: number | null) => {
+    highlightedUserIdRef.current = userId
     setHighlightedUserId(userId)
     if (userId !== null) {
       const el = rowRefs.current.get(userId)
@@ -185,8 +196,8 @@ export default function ScoreboardPage() {
   }, [])
 
   const columns = useMemo(
-    () => [nameColumnDef(history?.series ?? [], handleHighlight, highlightedUserId), ...columnDefs],
-    [history?.series, handleHighlight, highlightedUserId]
+    () => [nameColumnDef(history?.series ?? [], handleHighlight, highlightedUserIdRef), ...columnDefs],
+    [history?.series, handleHighlight]
   )
 
   const rows: Row[] = useMemo(
