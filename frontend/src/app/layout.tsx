@@ -32,6 +32,9 @@ const GeistMono = localFont({
 export const metadata: Metadata = {
   title: 'RB Scoreboard',
   description: 'Fantasy football scoreboard for World Cups',
+  icons: {
+    icon: [{ url: '/favicon.svg', type: 'image/svg+xml' }],
+  },
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
