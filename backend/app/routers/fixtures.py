@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.event import Event
 from app.models.fixture import Fixture, FixtureParticipant
 from app.models.season import Season
-from app.services.scoring import ACTIVE_STATES, compute_fixture_data
+from app.services.scoring import compute_fixture_data
 
 router = APIRouter()
 
@@ -127,8 +127,8 @@ async def get_fixture_detail(fixture_id: int, session: AsyncSession = Depends(ge
     if fixture is None:
         raise HTTPException(status_code=404, detail="Fixture not found")
 
-    if fixture.state not in ACTIVE_STATES:
-        raise HTTPException(status_code=404, detail="Fixture data not available yet")
+    if not fixture.participants:
+        raise HTTPException(status_code=404, detail="Fixture has no teams assigned yet")
 
     players, events = await compute_fixture_data(session, fixture)
 

@@ -12,8 +12,8 @@ const LIVE_STATES = new Set([
   'INPLAY_ET', 'INPLAY_ET_2ND_HALF', 'PEN_LIVE',
 ])
 
-function isClickable(state: string | null): boolean {
-  return state !== null && (FINISHED_STATES.has(state) || LIVE_STATES.has(state))
+function isClickable(fixture: FixtureListItem): boolean {
+  return fixture.participants.length > 0
 }
 
 function stateLabel(state: string | null): string {
@@ -56,7 +56,8 @@ function TeamDisplay({ team, align }: { team: FixtureParticipant | undefined; al
 function FixtureCard({ fixture }: { fixture: FixtureListItem }) {
   const home = fixture.participants.find((p) => p.location === 'home')
   const away = fixture.participants.find((p) => p.location === 'away')
-  const clickable = isClickable(fixture.state)
+  const clickable = isClickable(fixture)
+  const dimmed = !FINISHED_STATES.has(fixture.state ?? '') && !LIVE_STATES.has(fixture.state ?? '')
   const label = stateLabel(fixture.state)
   const variant = stateVariant(fixture.state)
 
@@ -70,8 +71,8 @@ function FixtureCard({ fixture }: { fixture: FixtureListItem }) {
   const inner = (
     <div
       className={`rounded-lg border p-3 bg-card flex flex-col gap-2 transition-colors${
-        clickable ? ' hover:bg-accent cursor-pointer' : ' opacity-50'
-      }`}
+        clickable ? ' hover:bg-accent cursor-pointer' : ''
+      }${dimmed ? ' opacity-50' : ''}`}
     >
       <div className="flex items-center gap-3">
         <TeamDisplay team={home} align="left" />

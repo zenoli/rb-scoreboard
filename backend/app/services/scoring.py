@@ -1187,7 +1187,7 @@ async def compute_fixture_data(
 ) -> tuple[list[FixturePlayer], list[LiveScoreEvent]]:
     """Compute drafted player points and events for a specific fixture."""
     season = await _get_active_season(session)
-    if season is None or fixture.state not in ACTIVE_STATES:
+    if season is None:
         return [], []
 
     weights = await _load_weights(session, season.id)
