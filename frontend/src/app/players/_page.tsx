@@ -215,7 +215,7 @@ export default function PlayersPage() {
                   }
                 : undefined
             }
-            className="grid grid-cols-8 gap-x-3 gap-y-2.5"
+            className="grid grid-cols-8 gap-x-3 gap-y-2.5 p-1 -m-1"
           >
             {countries.map((country) => {
               const isSelected = countryFilter === country.id
