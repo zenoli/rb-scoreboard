@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
@@ -19,6 +19,17 @@ export default function PlayersPage() {
   const [search, setSearch] = useState('')
   const [countryFilter, setCountryFilter] = useState<number | null>(null)
   const [positionFilter, setPositionFilter] = useState<Set<string>>(new Set())
+
+  // Collapsible flag grid state
+  const [flagsExpanded, setFlagsExpanded] = useState(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const [dragDelta, setDragDelta] = useState(0)
+  const flagGridRef = useRef<HTMLDivElement>(null)
+  const [gridMeasurements, setGridMeasurements] = useState<{
+    collapsedHeight: number
+    fullHeight: number
+    fadeHeight: number
+  } | null>(null)
 
   useEffect(() => {
     api.players({ include_points: true })
@@ -41,6 +52,91 @@ export default function PlayersPage() {
     }
     return [...seen.values()].sort((a, b) => a.name.localeCompare(b.name))
   }, [players])
+
+  // Measure the flag grid to determine collapsed height
+  useEffect(() => {
+    const grid = flagGridRef.current
+    if (!grid) return
+    const children = grid.children
+    if (children.length <= 8) {
+      setGridMeasurements(null)
+      return
+    }
+    const measure = () => {
+      const gridRect = grid.getBoundingClientRect()
+      const firstItem = children[0] as HTMLElement
+      const secondRowItem = children[8] as HTMLElement
+      const itemHeight = firstItem.offsetHeight
+      const collapsedHeight = (secondRowItem.getBoundingClientRect().top - gridRect.top) + itemHeight * 0.5
+      const fullHeight = grid.scrollHeight
+      setGridMeasurements({ collapsedHeight, fullHeight, fadeHeight: itemHeight * 1.5 })
+    }
+    requestAnimationFrame(measure)
+  }, [countries])
+
+  // Auto-expand when a hidden flag is selected
+  useEffect(() => {
+    if (countryFilter == null || !gridMeasurements) return
+    const index = countries.findIndex((c) => c.id === countryFilter)
+    if (index >= 8) setFlagsExpanded(true)
+  }, [countryFilter, countries, gridMeasurements])
+
+  // Drag handler — uses document listeners to avoid stale closures
+  function handleDragStart(e: React.PointerEvent) {
+    if (!gridMeasurements) return
+    e.preventDefault()
+    const startY = e.clientY
+    const expanded = flagsExpanded
+    const range = gridMeasurements.fullHeight - gridMeasurements.collapsedHeight
+    let lastDelta = 0
+
+    setIsDragging(true)
+
+    function onMove(ev: PointerEvent) {
+      const delta = ev.clientY - startY
+      lastDelta = expanded
+        ? Math.max(-range, Math.min(0, delta))
+        : Math.max(0, Math.min(range, delta))
+      setDragDelta(lastDelta)
+    }
+
+    function onUp() {
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
+
+      const threshold = range * 0.3
+      if (expanded) {
+        if (Math.abs(lastDelta) > threshold) setFlagsExpanded(false)
+      } else {
+        if (lastDelta > threshold) setFlagsExpanded(true)
+      }
+
+      setDragDelta(0)
+      setIsDragging(false)
+    }
+
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  }
+
+  // Computed flag grid styles
+  const shouldCollapse = gridMeasurements != null
+  const currentFlagHeight = gridMeasurements
+    ? Math.max(
+        gridMeasurements.collapsedHeight,
+        Math.min(
+          gridMeasurements.fullHeight,
+          (flagsExpanded ? gridMeasurements.fullHeight : gridMeasurements.collapsedHeight) + dragDelta
+        )
+      )
+    : undefined
+
+  const isFullyExpanded =
+    gridMeasurements != null &&
+    currentFlagHeight != null &&
+    currentFlagHeight >= gridMeasurements.fullHeight - 1
 
   const filtered = useMemo(() => {
     if (!players) return []
@@ -106,32 +202,66 @@ export default function PlayersPage() {
 
       {/* Country flags */}
       {!loading && countries.length > 0 && (
-        <div className="grid grid-cols-8 gap-x-3 gap-y-2.5 mb-4">
-          {countries.map((country) => {
-            const isSelected = countryFilter === country.id
-            return (
-              <button
-                key={country.id}
-                onClick={() => setCountryFilter(isSelected ? null : country.id)}
-                title={country.name}
-                className="flex flex-col items-center gap-0.5"
-              >
-                <div className={`w-10 h-10 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
-                  {country.image_path ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={country.image_path} alt={country.name} className="w-full h-full object-cover scale-150" />
-                  ) : (
-                    <div className="w-full h-full bg-muted flex items-center justify-center text-[11px] font-medium">
-                      {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
-                    </div>
-                  )}
-                </div>
-                <span className="text-[11px] leading-none text-muted-foreground">
-                  {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
-                </span>
-              </button>
-            )
-          })}
+        <div className="mb-4">
+          <div className="relative">
+          <div
+            ref={flagGridRef}
+            style={
+              shouldCollapse
+                ? {
+                    maxHeight: currentFlagHeight != null ? `${currentFlagHeight}px` : undefined,
+                    overflow: 'hidden',
+                    transition: isDragging ? 'none' : 'max-height 250ms ease-out',
+                  }
+                : undefined
+            }
+            className="grid grid-cols-8 gap-x-3 gap-y-2.5"
+          >
+            {countries.map((country) => {
+              const isSelected = countryFilter === country.id
+              return (
+                <button
+                  key={country.id}
+                  onClick={() => setCountryFilter(isSelected ? null : country.id)}
+                  title={country.name}
+                  className="flex flex-col items-center gap-0.5"
+                >
+                  <div className={`w-10 h-10 rounded-full overflow-hidden transition-all ${isSelected ? 'ring-2 ring-primary ring-offset-2' : ''}`}>
+                    {country.image_path ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img src={country.image_path} alt={country.name} className="w-full h-full object-cover scale-150" />
+                    ) : (
+                      <div className="w-full h-full bg-muted flex items-center justify-center text-[11px] font-medium">
+                        {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
+                      </div>
+                    )}
+                  </div>
+                  <span className="text-[11px] leading-none text-muted-foreground">
+                    {country.short_code ?? country.name.slice(0, 3).toUpperCase()}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+          {shouldCollapse && (
+            <div
+              className="absolute bottom-0 left-0 right-0 pointer-events-none transition-opacity duration-250 ease-out"
+              style={{
+                height: gridMeasurements ? `${gridMeasurements.fadeHeight}px` : 0,
+                background: 'linear-gradient(to bottom, transparent, var(--background))',
+                opacity: isFullyExpanded ? 0 : 1,
+              }}
+            />
+          )}
+          </div>
+          {shouldCollapse && (
+            <div
+              className="flex justify-center pt-2 cursor-grab active:cursor-grabbing touch-none select-none"
+              onPointerDown={handleDragStart}
+            >
+              <div className="w-8 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+          )}
         </div>
       )}
 
