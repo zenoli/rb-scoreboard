@@ -249,6 +249,10 @@ async def _sync_events_for_fixtures(session: AsyncSession, fixture_ids: list[int
                 "extra_minute": e.get("extra_minute"),
             })
 
+    if fixture_ids:
+        await session.execute(
+            Event.__table__.delete().where(Event.fixture_id.in_(fixture_ids))
+        )
     await _upsert(session, Event, event_rows)
     await session.commit()
     logger.info("Synced %d events across %d fixtures", len(event_rows), len(fixture_ids))
