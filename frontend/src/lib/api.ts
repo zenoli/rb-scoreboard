@@ -59,6 +59,7 @@ export const api = {
   player: (playerId: number) => get(`/api/players/${playerId}`),
   playerEvents: (playerId: number) => get(`/api/players/${playerId}/events`),
   drafts: () => get('/api/drafts'),
+  optimalDraft: () => get('/api/drafts/optimal'),
   draftPoints: (userId: number) => get(`/api/drafts/${userId}/points`),
   players: (params?: { position_category?: string; team_id?: number; season_id?: number; include_points?: boolean }) => {
     const qs = new URLSearchParams()

@@ -69,6 +69,14 @@ async def get_optimal_draft(session: AsyncSession = Depends(get_db)):
     all_players = players_result.scalars().all()
     points_map = await compute_all_player_points(session)
 
+    drafts_result = await session.execute(
+        select(Draft.player_id, User.username)
+        .join(User, Draft.user_id == User.id)
+        .where(Draft.season_id == season.id)
+        .where(Draft.player_id.is_not(None))
+    )
+    draft_map: dict[int, str] = {row.player_id: row.username for row in drafts_result.all()}
+
     # Build flow graph: source → team → player → pos → sink
     G = nx.DiGraph()
     for pos, cap in _POS_CAPS.items():
@@ -117,6 +125,7 @@ async def get_optimal_draft(session: AsyncSession = Depends(get_db)):
             assist_points=bd.assist if bd else 0.0,
             card_points=bd.card if bd else 0.0,
             clean_sheet_points=bd.clean_sheet if bd else 0.0,
+            drafted_by_username=draft_map.get(p.id),
         ))
 
     return result
