@@ -373,9 +373,9 @@ export function EfficiencyDrawer() {
               draft — the best possible squad that could have been picked.
             </p>
             <div className="my-6 flex justify-center">
-              <div className="flex flex-col items-center text-base">
+              <div className="flex items-center gap-3 text-base">
                 <span className="font-semibold">Efficiency</span>
-                <span className="my-1">=</span>
+                <span>=</span>
                 <div className="flex flex-col items-center">
                   <span className="border-b border-foreground px-4 pb-1">User&apos;s Total Points</span>
                   <span className="pt-1">Optimal Draft Total Points</span>
