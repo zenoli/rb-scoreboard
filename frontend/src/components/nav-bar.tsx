@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings, Radio, CalendarDays, Sparkles } from 'lucide-react'
+import { Volleyball, Menu, Trophy, Users, ClipboardList, Settings, Radio, CalendarDays } from 'lucide-react'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useLiveStatus } from '@/components/live-status-provider'
 import {
@@ -19,7 +19,6 @@ const navItems = [
   { href: '/fixtures', label: 'Fixtures', icon: CalendarDays },
   { href: '/players', label: 'Players', icon: Users },
   { href: '/drafts', label: 'Drafts', icon: ClipboardList },
-  { href: '/optimal-draft', label: 'Optimal Draft', icon: Sparkles },
   { href: '/admin', label: 'Admin', icon: Settings },
 ]
 

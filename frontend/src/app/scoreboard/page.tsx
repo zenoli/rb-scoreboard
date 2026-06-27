@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
+import Link from 'next/link'
 import {
   ColumnDef,
   flexRender,
@@ -20,9 +21,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
+import { PlayerIcon } from '@/components/ui/player-icon'
+import { ExplanationDrawer } from '@/components/explanation-drawer'
 import { api } from '@/lib/api'
-import type { ScoreboardResponse, ScoreHistoryResponse, UserScore } from '@/lib/types'
+import type { ScoreboardResponse, ScoreHistoryResponse, UserScore, PlayerResponse } from '@/lib/types'
 import { ScoreHistoryChart, chartColorForUserId } from '@/components/score-history-chart'
+import { PieChart, Pie, Cell } from 'recharts'
 import {
   Target,
   Handshake,
@@ -31,7 +35,6 @@ import {
   Sigma,
   type LucideProps,
 } from 'lucide-react'
-import Image from 'next/image'
 import clsx from 'clsx'
 
 const POLL_INTERVAL = 60_000
@@ -157,10 +160,117 @@ const columnDefs: ColumnDef<Row>[] = [
   },
 ]
 
+/* ── Optimal Draft components ── */
+
+function PlayerPin({ player }: { player: PlayerResponse }) {
+  return (
+    <Link href={`/player/${player.id}`} className="flex flex-col items-center gap-1">
+      <PlayerIcon
+        imagePath={player.image_path}
+        name={player.display_name}
+        teamImagePath={player.team_image_path}
+        points={player.total_points ?? 0}
+        size={48}
+        avatarClassName="ring-2 ring-white shadow-md"
+      />
+      <span className="text-[10px] text-white font-medium text-center leading-tight max-w-[56px] truncate drop-shadow">
+        {player.display_name?.split(' ').pop() ?? ''}
+      </span>
+      <span className="text-[9px] text-white/70 font-medium text-center leading-tight max-w-[56px] truncate drop-shadow">
+        {player.drafted_by_username ?? ''}
+      </span>
+    </Link>
+  )
+}
+
+function PitchRow({ players }: { players: PlayerResponse[] }) {
+  return (
+    <div className="flex justify-around items-start py-2">
+      {players.map((p) => (
+        <PlayerPin key={p.id} player={p} />
+      ))}
+    </div>
+  )
+}
+
+function OptimalPitch({ players }: { players: PlayerResponse[] }) {
+  const byPosition: Record<string, PlayerResponse[]> = { FWD: [], MID: [], DEF: [], GK: [] }
+  for (const p of players) {
+    const cat = p.position_category ?? 'MID'
+    if (cat in byPosition) byPosition[cat].push(p)
+  }
+
+  return (
+    <div
+      className="relative w-full max-w-sm mx-auto rounded-xl overflow-hidden shadow-lg"
+      style={{ background: 'linear-gradient(180deg, #2d7a27 0%, #3a9e33 50%, #2d7a27 100%)' }}
+    >
+      <svg
+        className="absolute inset-0 w-full h-full pointer-events-none"
+        viewBox="0 0 320 480"
+        preserveAspectRatio="none"
+      >
+        <line x1="0" y1="240" x2="320" y2="240" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <circle cx="160" cy="240" r="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <circle cx="160" cy="240" r="2" fill="rgba(255,255,255,0.4)" />
+        <rect x="80" y="0" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="110" y="0" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="80" y="400" width="160" height="80" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="110" y="440" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+        <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
+      </svg>
+      <div className="relative z-10 flex flex-col justify-between py-4" style={{ minHeight: '480px' }}>
+        <PitchRow players={byPosition.FWD} />
+        <PitchRow players={byPosition.MID} />
+        <PitchRow players={byPosition.DEF} />
+        <PitchRow players={byPosition.GK} />
+      </div>
+    </div>
+  )
+}
+
+function EfficiencyRing({ user, optimalTotal }: { user: UserScore; optimalTotal: number }) {
+  const pct = optimalTotal > 0 ? Math.min((user.total / optimalTotal) * 100, 100) : 0
+  const data = [{ value: pct }, { value: 100 - pct }]
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative" style={{ width: 80, height: 80 }}>
+        <PieChart width={80} height={80} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <Pie
+            data={data}
+            cx={40}
+            cy={40}
+            innerRadius={28}
+            outerRadius={38}
+            startAngle={90}
+            endAngle={-270}
+            dataKey="value"
+            strokeWidth={0}
+            cornerRadius={5}
+            animationBegin={0}
+            animationDuration={1200}
+          >
+            <Cell fill="var(--primary)" />
+            <Cell fill="var(--muted)" />
+          </Pie>
+        </PieChart>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-sm font-bold">{Math.round(pct)}%</span>
+        </div>
+      </div>
+      <span className="text-xs text-muted-foreground text-center leading-tight">{user.username}</span>
+    </div>
+  )
+}
+
+/* ── Main page ── */
+
 export default function ScoreboardPage() {
   const router = useRouter()
   const [data, setData] = useState<ScoreboardResponse | null>(null)
   const [history, setHistory] = useState<ScoreHistoryResponse | null>(null)
+  const [optimalPlayers, setOptimalPlayers] = useState<PlayerResponse[] | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'total', desc: true }])
@@ -186,6 +296,12 @@ export default function ScoreboardPage() {
     return () => clearInterval(interval)
   }, [])
 
+  useEffect(() => {
+    api.optimalDraft()
+      .then(setOptimalPlayers)
+      .catch(() => {}) // non-critical — silently skip if it fails
+  }, [])
+
   const handleHighlight = useCallback((userId: number | null) => {
     highlightedUserIdRef.current = userId
     setHighlightedUserId(userId)
@@ -208,6 +324,16 @@ export default function ScoreboardPage() {
     [data]
   )
 
+  const activeUsers = useMemo(
+    () => (data?.users ?? []).filter((u) => u.is_active),
+    [data]
+  )
+
+  const optimalTotal = useMemo(
+    () => optimalPlayers?.reduce((sum, p) => sum + (p.total_points ?? 0), 0) ?? 0,
+    [optimalPlayers]
+  )
+
   const table = useReactTable({
     data: rows,
     columns,
@@ -219,7 +345,7 @@ export default function ScoreboardPage() {
 
   if (error) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-8 text-center text-destructive">
+      <div className="max-w-2xl mx-auto px-4 py-8 text-center text-destructive">
         {error}
       </div>
     )
@@ -227,7 +353,7 @@ export default function ScoreboardPage() {
 
   if (!data) {
     return (
-      <div className="max-w-5xl mx-auto px-4 py-8">
+      <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="h-8 w-48 bg-muted animate-pulse rounded mb-6" />
         {[...Array(5)].map((_, i) => (
           <div key={i} className="h-12 bg-muted animate-pulse rounded mb-2" />
@@ -237,10 +363,10 @@ export default function ScoreboardPage() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto px-4 py-6">
+    <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-xl font-semibold">Scoreboard</h1>
+          <h1 className="text-2xl font-bold">Scoreboard</h1>
           {data.season_name && (
             <span className="text-xs text-muted-foreground">{data.season_name}</span>
           )}
@@ -299,6 +425,41 @@ export default function ScoreboardPage() {
             <ScoreHistoryChart data={history} highlightedUserId={highlightedUserId} />
           </div>
         </>
+      )}
+
+      {optimalPlayers ? (
+        <>
+          <div className="mt-8 mb-4 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <h2 className="text-xl font-semibold">Optimal Draft</h2>
+              <ExplanationDrawer />
+            </div>
+            <div className="flex items-center gap-3">
+              <span className="text-2xl font-bold">Total</span>
+              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black font-bold text-xl">
+                {optimalTotal}
+              </div>
+            </div>
+          </div>
+
+          <OptimalPitch players={optimalPlayers} />
+
+          {activeUsers.length > 0 && (
+            <div className="mt-6">
+              <h2 className="text-xl font-semibold mb-4">Efficiency</h2>
+              <div className="flex flex-wrap justify-around gap-6">
+                {activeUsers.map((u) => (
+                  <EfficiencyRing key={u.user_id} user={u} optimalTotal={optimalTotal} />
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="mt-8">
+          <div className="h-8 w-48 bg-muted animate-pulse rounded mb-6" />
+          <div className="h-96 bg-muted animate-pulse rounded-xl max-w-sm mx-auto" />
+        </div>
       )}
     </div>
   )
