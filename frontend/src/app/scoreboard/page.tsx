@@ -290,7 +290,7 @@ function EfficiencyRing({
 
   return (
     <div
-      className="flex flex-col items-center gap-1 cursor-pointer transition-opacity duration-200"
+      className="flex flex-col items-center gap-1 cursor-pointer transition-opacity duration-200 outline-none [&_*]:outline-none"
       style={{ opacity: dimmed ? 0.3 : 1 }}
       onClick={onClick}
     >
@@ -364,10 +364,6 @@ export default function ScoreboardPage() {
   const handleHighlight = useCallback((userId: number | null) => {
     highlightedUserIdRef.current = userId
     setHighlightedUserId(userId)
-    if (userId !== null) {
-      const el = rowRefs.current.get(userId)
-      if (el) el.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
-    }
   }, [])
 
   const columns = useMemo(
