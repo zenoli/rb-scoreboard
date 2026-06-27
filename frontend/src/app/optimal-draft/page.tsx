@@ -2,9 +2,10 @@
 
 import { useEffect, useState } from 'react'
 import Link from 'next/link'
+import { PieChart, Pie, Cell } from 'recharts'
 import { PlayerIcon } from '@/components/ui/player-icon'
 import { api } from '@/lib/api'
-import type { PlayerResponse } from '@/lib/types'
+import type { PlayerResponse, ScoreboardResponse, UserScore } from '@/lib/types'
 
 function PlayerPin({ player }: { player: PlayerResponse }) {
   return (
@@ -63,7 +64,6 @@ function OptimalPitch({ players }: { players: PlayerResponse[] }) {
         <rect x="110" y="440" width="100" height="40" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
         <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
       </svg>
-
       <div className="relative z-10 flex flex-col justify-between py-4" style={{ minHeight: '480px' }}>
         <Row players={byPosition.FWD} />
         <Row players={byPosition.MID} />
@@ -74,13 +74,51 @@ function OptimalPitch({ players }: { players: PlayerResponse[] }) {
   )
 }
 
+function EfficiencyRing({ user, optimalTotal }: { user: UserScore; optimalTotal: number }) {
+  const pct = optimalTotal > 0 ? Math.min((user.total / optimalTotal) * 100, 100) : 0
+  const data = [{ value: pct }, { value: 100 - pct }]
+
+  return (
+    <div className="flex flex-col items-center gap-1">
+      <div className="relative" style={{ width: 80, height: 80 }}>
+        <PieChart width={80} height={80} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
+          <Pie
+            data={data}
+            cx={40}
+            cy={40}
+            innerRadius={28}
+            outerRadius={38}
+            startAngle={90}
+            endAngle={-270}
+            dataKey="value"
+            strokeWidth={0}
+            animationBegin={0}
+            animationDuration={1200}
+          >
+            <Cell fill="var(--primary)" />
+            <Cell fill="var(--muted)" />
+          </Pie>
+        </PieChart>
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <span className="text-sm font-bold">{Math.round(pct)}%</span>
+        </div>
+      </div>
+      <span className="text-xs text-muted-foreground text-center leading-tight">{user.username}</span>
+    </div>
+  )
+}
+
 export default function OptimalDraftPage() {
   const [players, setPlayers] = useState<PlayerResponse[] | null>(null)
+  const [users, setUsers] = useState<UserScore[]>([])
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    api.optimalDraft()
-      .then((data: PlayerResponse[]) => setPlayers(data))
+    Promise.all([api.optimalDraft(), api.scores()])
+      .then(([draft, scoreboard]: [PlayerResponse[], ScoreboardResponse]) => {
+        setPlayers(draft)
+        setUsers(scoreboard.users.filter((u) => u.is_active))
+      })
       .catch((e: Error) => setError(e.message))
   }, [])
 
@@ -108,7 +146,19 @@ export default function OptimalDraftPage() {
           </div>
         </div>
       </div>
+
       <OptimalPitch players={players} />
+
+      {users.length > 0 && (
+        <div className="mt-6">
+          <h2 className="text-sm font-semibold text-muted-foreground mb-4 uppercase tracking-wide">Efficiency</h2>
+          <div className="flex flex-wrap justify-around gap-6">
+            {users.map((u) => (
+              <EfficiencyRing key={u.user_id} user={u} optimalTotal={total} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
