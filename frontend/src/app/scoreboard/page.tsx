@@ -33,6 +33,7 @@ import {
   Layers2,
   Shield,
   Sigma,
+  Loader2,
   type LucideProps,
 } from 'lucide-react'
 import clsx from 'clsx'
@@ -421,18 +422,16 @@ export default function ScoreboardPage() {
 
   if (!data) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-8">
-        <div className="h-8 w-48 bg-muted animate-pulse rounded mb-6" />
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="h-12 bg-muted animate-pulse rounded mb-2" />
-        ))}
+      <div className="max-w-2xl mx-auto px-4 py-8 flex justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     )
   }
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="animate-fade-in">
+        <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">Scoreboard</h1>
           {data.season_name && (
@@ -494,9 +493,10 @@ export default function ScoreboardPage() {
           </div>
         </>
       )}
+      </div>
 
       {optimalPlayers ? (
-        <>
+        <div className="animate-fade-in">
           <div className="mt-8 mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-semibold">Optimal Draft</h2>
@@ -534,11 +534,10 @@ export default function ScoreboardPage() {
               </div>
             </div>
           )}
-        </>
+        </div>
       ) : (
-        <div className="mt-8">
-          <div className="h-8 w-48 bg-muted animate-pulse rounded mb-6" />
-          <div className="h-96 bg-muted animate-pulse rounded-xl max-w-sm mx-auto" />
+        <div className="mt-8 flex justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
         </div>
       )}
     </div>
