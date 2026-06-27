@@ -196,20 +196,28 @@ function FlowGraphSvg() {
   )
 }
 
+/* ── "What's this?" trigger button ── */
+
+function WhatsThisButton({ ariaLabel }: { ariaLabel: string }) {
+  return (
+    <DrawerTrigger asChild>
+      <button
+        className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1.5 text-sm font-medium text-blue-400 hover:bg-blue-500/25 transition-colors"
+        aria-label={ariaLabel}
+      >
+        <CircleHelp className="size-4" />
+        <span>What&apos;s this?</span>
+      </button>
+    </DrawerTrigger>
+  )
+}
+
 /* ── Explanation Drawer ── */
 
 export function ExplanationDrawer() {
   return (
     <Drawer>
-      <DrawerTrigger asChild>
-        <button
-          className="inline-flex items-center gap-1.5 rounded-full bg-blue-500/15 px-3 py-1.5 text-sm font-medium text-blue-400 hover:bg-blue-500/25 transition-colors"
-          aria-label="How is the optimal draft computed?"
-        >
-          <CircleHelp className="size-4" />
-          <span>What&apos;s this?</span>
-        </button>
-      </DrawerTrigger>
+      <WhatsThisButton ariaLabel="How is the optimal draft computed?" />
       <DrawerContent className="max-h-[85vh]">
         <DrawerHeader>
           <DrawerTitle className="text-lg">How is the Optimal Draft computed?</DrawerTitle>
@@ -337,6 +345,46 @@ export function ExplanationDrawer() {
               carry flow. Each such edge means &quot;this player was selected for this
               position&quot;. The result is the provably optimal squad — no other selection of 16
               players can achieve a higher total score while satisfying all constraints.
+            </p>
+          </section>
+        </div>
+      </DrawerContent>
+    </Drawer>
+  )
+}
+
+/* ── Efficiency Drawer ── */
+
+export function EfficiencyDrawer() {
+  return (
+    <Drawer>
+      <WhatsThisButton ariaLabel="What is efficiency?" />
+      <DrawerContent className="max-h-[85vh]">
+        <DrawerHeader>
+          <DrawerTitle className="text-lg">Efficiency</DrawerTitle>
+          <DrawerDescription>
+            How close each player is to the theoretical best
+          </DrawerDescription>
+        </DrawerHeader>
+        <div className="overflow-y-auto px-6 pb-8 space-y-6 text-sm leading-relaxed text-popover-foreground/90">
+          <section>
+            <p>
+              Efficiency measures how a user&apos;s total score compares to the optimal
+              draft — the best possible squad that could have been picked.
+            </p>
+            <div className="my-6 flex justify-center">
+              <div className="flex flex-col items-center text-base">
+                <span className="font-semibold">Efficiency</span>
+                <span className="my-1">=</span>
+                <div className="flex flex-col items-center">
+                  <span className="border-b border-foreground px-4 pb-1">User&apos;s Total Points</span>
+                  <span className="pt-1">Optimal Draft Total Points</span>
+                </div>
+              </div>
+            </div>
+            <p>
+              A score of <strong>100%</strong> means the user&apos;s draft is performing as well as
+              the mathematically optimal one. The closer to 100%, the better the draft picks were.
             </p>
           </section>
         </div>

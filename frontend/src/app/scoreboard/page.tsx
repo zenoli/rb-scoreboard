@@ -22,7 +22,7 @@ import {
 } from '@/components/ui/table'
 import { Badge } from '@/components/ui/badge'
 import { PlayerIcon } from '@/components/ui/player-icon'
-import { ExplanationDrawer } from '@/components/explanation-drawer'
+import { ExplanationDrawer, EfficiencyDrawer } from '@/components/explanation-drawer'
 import { api } from '@/lib/api'
 import type { ScoreboardResponse, ScoreHistoryResponse, UserScore, PlayerResponse } from '@/lib/types'
 import { ScoreHistoryChart, chartColorForUserId } from '@/components/score-history-chart'
@@ -519,7 +519,10 @@ export default function ScoreboardPage() {
 
           {activeUsers.length > 0 && (
             <div className="mt-6">
-              <h2 className="text-xl font-semibold mb-4">Efficiency</h2>
+              <div className="flex items-center gap-2 mb-4">
+                <h2 className="text-xl font-semibold">Efficiency</h2>
+                <EfficiencyDrawer />
+              </div>
               <div className="flex flex-wrap justify-around gap-6">
                 {activeUsers.map((u) => {
                   const isHighlighted = highlightedUserId === u.user_id
