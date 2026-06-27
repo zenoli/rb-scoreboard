@@ -36,28 +36,28 @@ interface Edge {
 
 const NODES: Node[] = [
   // source
-  { id: 's', x: 400, y: 40, color: LAYER_COLORS.source, label: 's' },
+  { id: 's', x: 350, y: 40, color: LAYER_COLORS.source, label: 's' },
   // country layer
-  { id: 'SUI', x: 160, y: 140, color: LAYER_COLORS.country, label: 'SUI' },
-  { id: 'GER', x: 400, y: 140, color: LAYER_COLORS.country, label: 'GER' },
-  { id: 'BRA', x: 640, y: 140, color: LAYER_COLORS.country, label: 'BRA' },
+  { id: 'SUI', x: 100, y: 150, color: LAYER_COLORS.country, label: 'SUI' },
+  { id: 'GER', x: 350, y: 150, color: LAYER_COLORS.country, label: 'GER' },
+  { id: 'BRA', x: 600, y: 150, color: LAYER_COLORS.country, label: 'BRA' },
   // player layer
-  { id: 's1', x: 100, y: 260, color: LAYER_COLORS.player, label: 's1' },
-  { id: 's2', x: 180, y: 260, color: LAYER_COLORS.player, label: 's2' },
-  { id: 's3', x: 260, y: 260, color: LAYER_COLORS.player, label: 's3' },
-  { id: 'g1', x: 340, y: 260, color: LAYER_COLORS.player, label: 'g1' },
-  { id: 'g2', x: 420, y: 260, color: LAYER_COLORS.player, label: 'g2' },
-  { id: 'g3', x: 500, y: 260, color: LAYER_COLORS.player, label: 'g3' },
-  { id: 'b1', x: 560, y: 260, color: LAYER_COLORS.player, label: 'b1' },
-  { id: 'b2', x: 640, y: 260, color: LAYER_COLORS.player, label: 'b2' },
-  { id: 'b3', x: 720, y: 260, color: LAYER_COLORS.player, label: 'b3' },
+  { id: 's1', x: 40, y: 275, color: LAYER_COLORS.player, label: 's1' },
+  { id: 's2', x: 120, y: 275, color: LAYER_COLORS.player, label: 's2' },
+  { id: 's3', x: 200, y: 275, color: LAYER_COLORS.player, label: 's3' },
+  { id: 'g1', x: 280, y: 275, color: LAYER_COLORS.player, label: 'g1' },
+  { id: 'g2', x: 360, y: 275, color: LAYER_COLORS.player, label: 'g2' },
+  { id: 'g3', x: 440, y: 275, color: LAYER_COLORS.player, label: 'g3' },
+  { id: 'b1', x: 510, y: 275, color: LAYER_COLORS.player, label: 'b1' },
+  { id: 'b2', x: 590, y: 275, color: LAYER_COLORS.player, label: 'b2' },
+  { id: 'b3', x: 670, y: 275, color: LAYER_COLORS.player, label: 'b3' },
   // position layer
-  { id: 'GK', x: 140, y: 380, color: LAYER_COLORS.position, label: 'GK' },
-  { id: 'DEF', x: 320, y: 380, color: LAYER_COLORS.position, label: 'DEF' },
-  { id: 'MID', x: 500, y: 380, color: LAYER_COLORS.position, label: 'MID' },
-  { id: 'FW', x: 660, y: 380, color: LAYER_COLORS.position, label: 'FW' },
+  { id: 'GK', x: 80, y: 400, color: LAYER_COLORS.position, label: 'GK' },
+  { id: 'DEF', x: 270, y: 400, color: LAYER_COLORS.position, label: 'DEF' },
+  { id: 'MID', x: 450, y: 400, color: LAYER_COLORS.position, label: 'MID' },
+  { id: 'FW', x: 620, y: 400, color: LAYER_COLORS.position, label: 'FW' },
   // sink
-  { id: 't', x: 400, y: 480, color: LAYER_COLORS.sink, label: 't' },
+  { id: 't', x: 350, y: 510, color: LAYER_COLORS.sink, label: 't' },
 ]
 
 const nodeMap = new Map(NODES.map((n) => [n.id, n]))
@@ -109,46 +109,69 @@ const EDGES: Edge[] = [
   { from: 'FW', to: 't', cap: 5 },
 ]
 
+const SINK_EDGES = new Set(['GK-t', 'DEF-t', 'MID-t', 'FW-t'])
+const R = 24
+
+/** Return the point on the border of a circle (cx,cy,r) towards target (tx,ty) */
+function borderPt(cx: number, cy: number, tx: number, ty: number) {
+  const dx = tx - cx
+  const dy = ty - cy
+  const len = Math.sqrt(dx * dx + dy * dy)
+  return { x: cx + (dx / len) * R, y: cy + (dy / len) * R }
+}
+
 function FlowGraphSvg() {
   return (
-    <svg viewBox="0 0 800 520" className="w-full" aria-label="Min-cost max-flow graph">
-      {/* Layer labels */}
-      <text x="16" y="145" fill="#94a3b8" fontSize="13" fontStyle="italic">
-        country nodes
-      </text>
-      <text x="16" y="265" fill="#94a3b8" fontSize="13" fontStyle="italic">
-        player nodes
-      </text>
-      <text x="16" y="385" fill="#94a3b8" fontSize="13" fontStyle="italic">
-        position nodes
-      </text>
-
+    <svg viewBox="0 0 710 550" className="w-full" aria-label="Min-cost max-flow graph">
       {/* Edges */}
       {EDGES.map((e, i) => {
         const a = nodeMap.get(e.from)!
         const b = nodeMap.get(e.to)!
-        const mx = (a.x + b.x) / 2
-        const my = (a.y + b.y) / 2
+        const isSinkEdge = SINK_EDGES.has(`${e.from}-${e.to}`)
+        const p1 = borderPt(a.x, a.y, b.x, b.y)
+        const p2 = borderPt(b.x, b.y, a.x, a.y)
+        const mx = (p1.x + p2.x) / 2
+        const my = (p1.y + p2.y) / 2
+
+        if (isSinkEdge) {
+          const dx = p2.x - p1.x
+          const dy = p2.y - p1.y
+          const len = Math.sqrt(dx * dx + dy * dy)
+          const ux = dx / len
+          const uy = dy / len
+          const gap = 20
+          return (
+            <g key={i}>
+              <line
+                x1={p1.x} y1={p1.y}
+                x2={mx - ux * gap} y2={my - uy * gap}
+                stroke="rgba(148,163,184,0.35)" strokeWidth={1.5}
+              />
+              <line
+                x1={mx + ux * gap} y1={my + uy * gap}
+                x2={p2.x} y2={p2.y}
+                stroke="rgba(148,163,184,0.35)" strokeWidth={1.5}
+              />
+              <text
+                x={mx}
+                y={my - 6}
+                fill="#cbd5e1"
+                fontSize="19"
+                textAnchor="middle"
+                fontWeight="700"
+              >
+                {e.cap}
+              </text>
+            </g>
+          )
+        }
+
         return (
           <g key={i}>
             <line
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              stroke="rgba(148,163,184,0.35)"
-              strokeWidth={1.2}
+              x1={p1.x} y1={p1.y} x2={p2.x} y2={p2.y}
+              stroke="rgba(148,163,184,0.35)" strokeWidth={1.5}
             />
-            <text
-              x={mx}
-              y={my - 4}
-              fill="#cbd5e1"
-              fontSize="11"
-              textAnchor="middle"
-              fontWeight="500"
-            >
-              {e.cap}
-            </text>
           </g>
         )
       })}
@@ -156,12 +179,12 @@ function FlowGraphSvg() {
       {/* Nodes */}
       {NODES.map((n) => (
         <g key={n.id}>
-          <circle cx={n.x} cy={n.y} r={18} fill={n.color} fillOpacity={0.15} stroke={n.color} strokeWidth={1.5} />
+          <circle cx={n.x} cy={n.y} r={24} fill={n.color} fillOpacity={0.15} stroke={n.color} strokeWidth={2} />
           <text
             x={n.x}
-            y={n.y + 5}
+            y={n.y + 6}
             fill={n.color}
-            fontSize="13"
+            fontSize="15"
             fontWeight="600"
             textAnchor="middle"
           >
@@ -298,7 +321,7 @@ export function ExplanationDrawer() {
           <section>
             <h3 className="text-base font-semibold mb-2">Costs and the objective</h3>
             <p>
-              Every edge in the network has zero cost <em>except</em> the player → position
+              Every edge in the network has zero cost except the player → position
               edges. Those carry a cost equal to the negative of the player&apos;s total points.
               When the algorithm finds the min-cost max-flow, it naturally selects the combination
               of players that maximises total points — while respecting all the capacity
