@@ -231,14 +231,14 @@ export function ExplanationDrawer() {
             <h3 className="text-base font-semibold mb-2">The problem</h3>
             <p>
               Given all the players in the tournament, what is the best squad you could
-              possibly draft? We need to pick exactly <strong>16 players</strong> — 1 goalkeeper,
-              5 defenders, 5 midfielders, and 5 forwards — with{' '}
+              possibly draft? We need to pick exactly <strong>16 players</strong>: 1 goalkeeper,
+              5 defenders, 5 midfielders, and 5 forwards, with{' '}
               <strong>at most one player per team</strong>. The goal is to{' '}
               <strong>maximise total points</strong>.
             </p>
             <p className="mt-2">
               This isn&apos;t something you can solve by just sorting players by points and picking
-              the top 16 — the position limits and one-per-team constraint make it a genuine
+              the top 16. The position limits and one-per-team constraint make it a genuine
               optimisation problem. Brute-forcing all combinations is out of the question
               (there are far too many). Luckily, there&apos;s an elegant way to solve it.
             </p>
@@ -286,7 +286,7 @@ export function ExplanationDrawer() {
               <li className="flex gap-2">
                 <span className="inline-block size-3 rounded-full mt-1 shrink-0" style={{ background: LAYER_COLORS.source }} />
                 <span>
-                  <strong>Source (s)</strong> — the starting point. It connects to every team node
+                  <strong>Source (s)</strong>: the starting point. It connects to every team node
                   with capacity <strong>1</strong>, ensuring we pick <em>at most one player per
                   team</em>.
                 </span>
@@ -294,14 +294,14 @@ export function ExplanationDrawer() {
               <li className="flex gap-2">
                 <span className="inline-block size-3 rounded-full mt-1 shrink-0" style={{ background: LAYER_COLORS.country }} />
                 <span>
-                  <strong>Team nodes</strong> — one per team (SUI, GER, BRA, …). Each connects to
+                  <strong>Team nodes</strong>: one per team (SUI, GER, BRA, …). Each connects to
                   its players with capacity <strong>1</strong>.
                 </span>
               </li>
               <li className="flex gap-2">
                 <span className="inline-block size-3 rounded-full mt-1 shrink-0" style={{ background: LAYER_COLORS.player }} />
                 <span>
-                  <strong>Player nodes</strong> — one per player. Each connects to every position
+                  <strong>Player nodes</strong>: one per player. Each connects to every position
                   the player is eligible for (capacity <strong>1</strong>). This is where the{' '}
                   <strong>cost</strong> lives: the edge cost is set to <em>−(player&apos;s total
                   points)</em>.
@@ -310,7 +310,7 @@ export function ExplanationDrawer() {
               <li className="flex gap-2">
                 <span className="inline-block size-3 rounded-full mt-1 shrink-0" style={{ background: LAYER_COLORS.position }} />
                 <span>
-                  <strong>Position nodes</strong> — GK, DEF, MID, FW. Each connects to the sink
+                  <strong>Position nodes</strong>: GK, DEF, MID, FW. Each connects to the sink
                   with its capacity limit: <strong>1</strong> for GK, <strong>5</strong> for DEF,
                   MID, and FW. This enforces the squad shape.
                 </span>
@@ -318,7 +318,7 @@ export function ExplanationDrawer() {
               <li className="flex gap-2">
                 <span className="inline-block size-3 rounded-full mt-1 shrink-0" style={{ background: LAYER_COLORS.sink }} />
                 <span>
-                  <strong>Sink (t)</strong> — the endpoint. The total capacity into the sink is
+                  <strong>Sink (t)</strong>: the endpoint. The total capacity into the sink is
                   1 + 5 + 5 + 5 = <strong>16</strong>, which is exactly the squad size.
                 </span>
               </li>
@@ -332,7 +332,7 @@ export function ExplanationDrawer() {
               Every edge in the network has zero cost except the player → position
               edges. Those carry a cost equal to the negative of the player&apos;s total points.
               When the algorithm finds the min-cost max-flow, it naturally selects the combination
-              of players that maximises total points — while respecting all the capacity
+              of players that maximises total points, while respecting all the capacity
               constraints.
             </p>
           </section>
@@ -343,7 +343,7 @@ export function ExplanationDrawer() {
             <p>
               Once the algorithm finishes, we simply look at which player → position edges
               carry flow. Each such edge means &quot;this player was selected for this
-              position&quot;. The result is the provably optimal squad — no other selection of 16
+              position&quot;. The result is the provably optimal squad: no other selection of 16
               players can achieve a higher total score while satisfying all constraints.
             </p>
           </section>
@@ -370,7 +370,7 @@ export function EfficiencyDrawer() {
           <section>
             <p>
               Efficiency measures how a user&apos;s total score compares to the optimal
-              draft — the best possible squad that could have been picked.
+              draft, the best possible squad that could have been picked.
             </p>
             <div className="my-6 flex justify-center">
               <div className="flex items-center gap-3 text-base">
