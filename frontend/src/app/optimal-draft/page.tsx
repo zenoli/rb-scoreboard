@@ -92,6 +92,7 @@ function EfficiencyRing({ user, optimalTotal }: { user: UserScore; optimalTotal:
             endAngle={-270}
             dataKey="value"
             strokeWidth={0}
+            cornerRadius={5}
             animationBegin={0}
             animationDuration={1200}
           >
