@@ -162,16 +162,31 @@ const columnDefs: ColumnDef<Row>[] = [
 
 /* ── Optimal Draft components ── */
 
-function PlayerPin({ player }: { player: PlayerResponse }) {
+function PlayerPin({
+  player,
+  highlighted,
+  dimmed,
+  highlightColor,
+}: {
+  player: PlayerResponse
+  highlighted?: boolean
+  dimmed?: boolean
+  highlightColor?: string
+}) {
   return (
-    <Link href={`/player/${player.id}`} className="flex flex-col items-center gap-1">
+    <Link
+      href={`/player/${player.id}`}
+      className="flex flex-col items-center gap-1 transition-opacity duration-200"
+      style={{ opacity: dimmed ? 0.3 : 1 }}
+    >
       <PlayerIcon
         imagePath={player.image_path}
         name={player.display_name}
         teamImagePath={player.team_image_path}
         points={player.total_points ?? 0}
         size={48}
-        avatarClassName="ring-2 ring-white shadow-md"
+        avatarClassName={highlighted ? 'ring-[3px] shadow-lg' : 'ring-2 ring-white shadow-md'}
+        style={highlighted && highlightColor ? { '--tw-ring-color': highlightColor } as React.CSSProperties : undefined}
       />
       <span className="text-[10px] text-white font-medium text-center leading-tight max-w-[56px] truncate drop-shadow">
         {player.display_name?.split(' ').pop() ?? ''}
@@ -183,17 +198,42 @@ function PlayerPin({ player }: { player: PlayerResponse }) {
   )
 }
 
-function PitchRow({ players }: { players: PlayerResponse[] }) {
+function PitchRow({
+  players,
+  highlightedUsername,
+  highlightColor,
+}: {
+  players: PlayerResponse[]
+  highlightedUsername: string | null
+  highlightColor?: string
+}) {
   return (
     <div className="flex justify-around items-start py-2">
-      {players.map((p) => (
-        <PlayerPin key={p.id} player={p} />
-      ))}
+      {players.map((p) => {
+        const isOwned = p.drafted_by_username === highlightedUsername
+        return (
+          <PlayerPin
+            key={p.id}
+            player={p}
+            highlighted={highlightedUsername !== null && isOwned}
+            dimmed={highlightedUsername !== null && !isOwned}
+            highlightColor={highlightColor}
+          />
+        )
+      })}
     </div>
   )
 }
 
-function OptimalPitch({ players }: { players: PlayerResponse[] }) {
+function OptimalPitch({
+  players,
+  highlightedUsername,
+  highlightColor,
+}: {
+  players: PlayerResponse[]
+  highlightedUsername: string | null
+  highlightColor?: string
+}) {
   const byPosition: Record<string, PlayerResponse[]> = { FWD: [], MID: [], DEF: [], GK: [] }
   for (const p of players) {
     const cat = p.position_category ?? 'MID'
@@ -220,21 +260,40 @@ function OptimalPitch({ players }: { players: PlayerResponse[] }) {
         <rect x="4" y="4" width="312" height="472" fill="none" stroke="rgba(255,255,255,0.25)" strokeWidth="1.5" />
       </svg>
       <div className="relative z-10 flex flex-col justify-between py-4" style={{ minHeight: '480px' }}>
-        <PitchRow players={byPosition.FWD} />
-        <PitchRow players={byPosition.MID} />
-        <PitchRow players={byPosition.DEF} />
-        <PitchRow players={byPosition.GK} />
+        <PitchRow players={byPosition.FWD} highlightedUsername={highlightedUsername} highlightColor={highlightColor} />
+        <PitchRow players={byPosition.MID} highlightedUsername={highlightedUsername} highlightColor={highlightColor} />
+        <PitchRow players={byPosition.DEF} highlightedUsername={highlightedUsername} highlightColor={highlightColor} />
+        <PitchRow players={byPosition.GK} highlightedUsername={highlightedUsername} highlightColor={highlightColor} />
       </div>
     </div>
   )
 }
 
-function EfficiencyRing({ user, optimalTotal }: { user: UserScore; optimalTotal: number }) {
+function EfficiencyRing({
+  user,
+  optimalTotal,
+  highlighted,
+  dimmed,
+  highlightColor,
+  onClick,
+}: {
+  user: UserScore
+  optimalTotal: number
+  highlighted?: boolean
+  dimmed?: boolean
+  highlightColor?: string
+  onClick?: () => void
+}) {
   const pct = optimalTotal > 0 ? Math.min((user.total / optimalTotal) * 100, 100) : 0
   const data = [{ value: pct }, { value: 100 - pct }]
+  const fillColor = highlighted && highlightColor ? highlightColor : 'var(--primary)'
 
   return (
-    <div className="flex flex-col items-center gap-1">
+    <div
+      className="flex flex-col items-center gap-1 cursor-pointer transition-opacity duration-200"
+      style={{ opacity: dimmed ? 0.3 : 1 }}
+      onClick={onClick}
+    >
       <div className="relative" style={{ width: 80, height: 80 }}>
         <PieChart width={80} height={80} margin={{ top: 0, right: 0, bottom: 0, left: 0 }}>
           <Pie
@@ -251,7 +310,7 @@ function EfficiencyRing({ user, optimalTotal }: { user: UserScore; optimalTotal:
             animationBegin={0}
             animationDuration={1200}
           >
-            <Cell fill="var(--primary)" />
+            <Cell fill={fillColor} />
             <Cell fill="var(--muted)" />
           </Pie>
         </PieChart>
@@ -332,6 +391,19 @@ export default function ScoreboardPage() {
   const optimalTotal = useMemo(
     () => optimalPlayers?.reduce((sum, p) => sum + (p.total_points ?? 0), 0) ?? 0,
     [optimalPlayers]
+  )
+
+  const highlightColor = useMemo(
+    () => highlightedUserId !== null ? chartColorForUserId(highlightedUserId, history?.series ?? []) : undefined,
+    [highlightedUserId, history?.series]
+  )
+
+  const highlightedUsername = useMemo(
+    () => {
+      if (highlightedUserId === null) return null
+      return activeUsers.find((u) => u.user_id === highlightedUserId)?.username ?? null
+    },
+    [highlightedUserId, activeUsers]
   )
 
   const table = useReactTable({
@@ -442,15 +514,27 @@ export default function ScoreboardPage() {
             </div>
           </div>
 
-          <OptimalPitch players={optimalPlayers} />
+          <OptimalPitch players={optimalPlayers} highlightedUsername={highlightedUsername} highlightColor={highlightColor} />
 
           {activeUsers.length > 0 && (
             <div className="mt-6">
               <h2 className="text-xl font-semibold mb-4">Efficiency</h2>
               <div className="flex flex-wrap justify-around gap-6">
-                {activeUsers.map((u) => (
-                  <EfficiencyRing key={u.user_id} user={u} optimalTotal={optimalTotal} />
-                ))}
+                {activeUsers.map((u) => {
+                  const isHighlighted = highlightedUserId === u.user_id
+                  const userColor = chartColorForUserId(u.user_id, history?.series ?? [])
+                  return (
+                    <EfficiencyRing
+                      key={u.user_id}
+                      user={u}
+                      optimalTotal={optimalTotal}
+                      highlighted={isHighlighted}
+                      dimmed={highlightedUserId !== null && !isHighlighted}
+                      highlightColor={userColor}
+                      onClick={() => handleHighlight(isHighlighted ? null : u.user_id)}
+                    />
+                  )
+                })}
               </div>
             </div>
           )}

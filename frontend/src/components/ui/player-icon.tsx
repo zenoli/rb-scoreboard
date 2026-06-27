@@ -12,6 +12,7 @@ interface PlayerIconProps {
   size?: number
   avatarClassName?: string
   className?: string
+  style?: React.CSSProperties
 }
 
 export function PlayerIcon({
@@ -23,6 +24,7 @@ export function PlayerIcon({
   size = 40,
   avatarClassName = 'ring-1 ring-border shadow-sm',
   className,
+  style,
 }: PlayerIconProps) {
   const badgeSize = Math.round(size * 0.38)
   const badgeOffset = Math.round(-badgeSize * 0.28)
@@ -35,7 +37,7 @@ export function PlayerIcon({
       className={`relative flex-shrink-0${className ? ` ${className}` : ''}`}
       style={{ width: size, height: size }}
     >
-      <div className={`w-full h-full rounded-full overflow-hidden bg-muted drop-shadow-md ${avatarClassName}`}>
+      <div className={`w-full h-full rounded-full overflow-hidden bg-muted drop-shadow-md ${avatarClassName}`} style={style}>
         {imagePath ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={imagePath} alt={name ?? ''} className="w-full h-full object-cover" />
