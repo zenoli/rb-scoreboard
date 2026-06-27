@@ -33,6 +33,10 @@ import {
   Layers2,
   Shield,
   Sigma,
+  ChartSpline,
+  Crown,
+  Gauge,
+  Trophy,
   type LucideProps,
 } from 'lucide-react'
 import { Riple } from 'react-loading-indicators'
@@ -439,7 +443,7 @@ export default function ScoreboardPage() {
       <div>
         <div className="flex items-center justify-between mb-4">
         <div>
-          <h1 className="text-2xl font-bold">Scoreboard</h1>
+          <h1 className="text-xl font-bold flex items-center gap-2"><Trophy size={20} />Scoreboard</h1>
           {data.season_name && (
             <span className="text-xs text-muted-foreground">{data.season_name}</span>
           )}
@@ -493,7 +497,7 @@ export default function ScoreboardPage() {
 
       {history && history.dates.length > 0 && (
         <>
-          <h2 className="text-xl font-semibold mt-8 mb-4">Points over time</h2>
+          <h2 className="text-xl font-semibold mt-8 mb-4 flex items-center gap-2"><ChartSpline size={20} />Points over time</h2>
           <div className="rounded-md border p-4">
             <ScoreHistoryChart data={history} highlightedUserId={highlightedUserId} />
           </div>
@@ -504,7 +508,7 @@ export default function ScoreboardPage() {
       {optimalPlayers ? (
         <div className="animate-fade-in">
           <div className="mt-8 mb-4 flex items-center gap-2">
-            <h2 className="text-xl font-semibold">Optimal Draft</h2>
+            <h2 className="text-xl font-semibold flex items-center gap-2"><Crown size={20} />Optimal Draft</h2>
             <ExplanationDrawer />
           </div>
 
@@ -520,7 +524,7 @@ export default function ScoreboardPage() {
           {activeUsers.length > 0 && (
             <div className="mt-6">
               <div className="flex items-center gap-2 mb-4">
-                <h2 className="text-xl font-semibold">Efficiency</h2>
+                <h2 className="text-xl font-semibold flex items-center gap-2"><Gauge size={20} />Efficiency</h2>
                 <EfficiencyDrawer />
               </div>
               <div className="flex flex-wrap justify-around gap-6">
