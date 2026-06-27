@@ -207,7 +207,7 @@ export function ExplanationDrawer() {
           aria-label="How is the optimal draft computed?"
         >
           <CircleHelp className="size-4" />
-          <span className="hidden sm:inline">Explanation</span>
+          <span>What&apos;s this?</span>
         </button>
       </DrawerTrigger>
       <DrawerContent className="max-h-[85vh]">

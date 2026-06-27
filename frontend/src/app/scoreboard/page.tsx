@@ -33,9 +33,9 @@ import {
   Layers2,
   Shield,
   Sigma,
-  Loader2,
   type LucideProps,
 } from 'lucide-react'
+import { Riple } from 'react-loading-indicators'
 import clsx from 'clsx'
 
 const POLL_INTERVAL = 60_000
@@ -420,17 +420,23 @@ export default function ScoreboardPage() {
     )
   }
 
-  if (!data) {
-    return (
-      <div className="max-w-2xl mx-auto px-4 py-8 flex justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    )
-  }
+  const loaded = !!data
 
   return (
-    <div className="max-w-2xl mx-auto px-4 py-6">
-      <div className="animate-fade-in">
+    <>
+      <div
+        className="fixed inset-0 flex items-center justify-center pointer-events-none z-50 animate-fade-in transition-opacity duration-300"
+        style={{ opacity: loaded ? 0 : 1 }}
+      >
+        <Riple color="var(--color-muted-foreground)" size="medium" />
+      </div>
+
+    {data && (
+    <div
+      className="max-w-2xl mx-auto px-4 py-6 transition-opacity duration-300"
+      style={{ opacity: loaded ? 1 : 0 }}
+    >
+      <div>
         <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-2xl font-bold">Scoreboard</h1>
@@ -497,20 +503,19 @@ export default function ScoreboardPage() {
 
       {optimalPlayers ? (
         <div className="animate-fade-in">
-          <div className="mt-8 mb-4 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-xl font-semibold">Optimal Draft</h2>
-              <ExplanationDrawer />
-            </div>
-            <div className="flex items-center gap-3">
-              <span className="text-2xl font-bold">Total</span>
-              <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black font-bold text-xl">
-                {optimalTotal}
-              </div>
-            </div>
+          <div className="mt-8 mb-4 flex items-center gap-2">
+            <h2 className="text-xl font-semibold">Optimal Draft</h2>
+            <ExplanationDrawer />
           </div>
 
           <OptimalPitch players={optimalPlayers} highlightedUsername={highlightedUsername} highlightColor={highlightColor} />
+
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <span className="text-lg font-semibold">Total</span>
+            <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black font-bold text-xl">
+              {optimalTotal}
+            </div>
+          </div>
 
           {activeUsers.length > 0 && (
             <div className="mt-6">
@@ -535,11 +540,9 @@ export default function ScoreboardPage() {
             </div>
           )}
         </div>
-      ) : (
-        <div className="mt-8 flex justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      )}
+      ) : null}
     </div>
+    )}
+    </>
   )
 }
