@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { PieChart, Pie, Cell } from 'recharts'
 import { PlayerIcon } from '@/components/ui/player-icon'
+import { ExplanationDrawer } from './explanation-drawer'
 import { api } from '@/lib/api'
 import type { PlayerResponse, ScoreboardResponse, UserScore } from '@/lib/types'
 
@@ -139,7 +140,10 @@ export default function OptimalDraftPage() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Optimal Draft</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-2xl font-bold">Optimal Draft</h1>
+          <ExplanationDrawer />
+        </div>
         <div className="flex items-center gap-3">
           <span className="text-2xl font-bold">Total</span>
           <div className="flex h-14 w-14 items-center justify-center rounded-full bg-white text-black font-bold text-xl">
