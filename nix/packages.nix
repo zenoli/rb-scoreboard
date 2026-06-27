@@ -47,7 +47,7 @@
         src = ../frontend;
 
         # Run `nix build .#frontend` once to get the correct hash from the error output.
-        npmDepsHash = pkgs.lib.fakeHash;
+        npmDepsHash = "sha256-AzXTGkNatihBjItaDyXtuy9hVQ3bWEmi/WKOhezZGxQ=";
 
         # Empty string → relative URLs; Next.js rewrites proxy API calls to backend
         env.NEXT_PUBLIC_API_URL = "";
