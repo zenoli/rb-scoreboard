@@ -30,6 +30,7 @@
           apscheduler
           python-multipart
           aiofiles
+          networkx
         ];
 
         doCheck = false;
